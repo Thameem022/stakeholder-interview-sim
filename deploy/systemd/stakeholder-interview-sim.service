@@ -1,0 +1,22 @@
+[Unit]
+Description=Stakeholder Interview Simulator (FastAPI + Realtime WebSocket)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+User=thameem
+Group=www-data
+WorkingDirectory=/opt/stakeholder-interview-sim/backend
+EnvironmentFile=/opt/stakeholder-interview-sim/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=UV_PROJECT_ENVIRONMENT=/opt/stakeholder-interview-sim/backend/.venv
+
+# uvicorn run via the project's uv-managed venv
+ExecStart=/opt/stakeholder-interview-sim/backend/.venv/bin/uvicorn app.main:app \
+  --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=127.0.0.1
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
