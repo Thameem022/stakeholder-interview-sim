@@ -1,0 +1,90 @@
+{
+  "persona_id": "sarah_donnelly",
+  "persona_name": "Sarah Donnelly",
+  "tier_metadata": {
+    "1": {
+      "title": "Operational and Experiential Knowledge",
+      "category": "Operational",
+      "description": "Direct business impact of flooding — revenue losses, perception, and the role of predictability",
+      "why_it_matters": "Sarah's operational reality is how climate risk lands on the local economy day by day. Without surfacing this baseline, adaptation planning will frame downtown only as physical infrastructure and miss the businesses that animate it."
+    },
+    "2": {
+      "title": "Informal Prioritization, Timing, and System Interaction",
+      "category": "Contextual",
+      "description": "Misalignment between planning timelines and business timelines, and where the economic burden actually lands",
+      "why_it_matters": "Cleanup is fast; prevention is slow; losses sit with owners privately. These timing and burden patterns reveal the structural mismatch between how the city responds and how businesses survive — gaps here produce plans that small businesses cannot live with."
+    },
+    "3": {
+      "title": "Thresholds, Ethical Trade-Offs, and Fragility",
+      "category": "Strategic",
+      "description": "Private viability thresholds, the hidden cost transfer in 'resilience' language, and uneven adaptive capacity",
+      "why_it_matters": "Sarah holds informal viability thresholds that, once crossed, will silently end the business. Failing to elicit these — and the broader transfer of public risk onto small actors — risks adaptation strategies that succeed technically while quietly hollowing out the downtown."
+    }
+  },
+  "sic_catalog": [
+    {
+      "chunk_id": "sarah_d_op_001",
+      "domain": "operational",
+      "tier": 1,
+      "fact_summary": "Even short flooding closures cause unrecoverable revenue losses; weekend disruption is particularly damaging because the lost revenue does not return.",
+      "evaluation_criteria": "Student asked open-ended questions about how flooding affects the business and elicited specifics about closures, revenue loss, or the disproportionate impact of weekend disruption.",
+      "suggested_follow_up": "When a flood closes you for a day or two, what does that actually cost the business?"
+    },
+    {
+      "chunk_id": "sarah_d_op_002",
+      "domain": "operational",
+      "tier": 1,
+      "fact_summary": "Visibility and perception matter as much as physical damage — customers assume downtown is closed even when it is not, social media images outlast actual disruption, and foot traffic stays suppressed for days after the water recedes.",
+      "evaluation_criteria": "Student probed beyond physical flooding impacts and surfaced how perception, social media, or customer confusion suppresses business well after the event is over.",
+      "suggested_follow_up": "Even after the water's gone, what makes it hard to get customers back through the door?"
+    },
+    {
+      "chunk_id": "sarah_d_context_001",
+      "domain": "contextual",
+      "tier": 2,
+      "fact_summary": "Downtown receives fast cleanup and rapid response, but durable prevention is slow; temporary fixes accumulate without resolving root causes.",
+      "evaluation_criteria": "Student probed the difference between immediate response and long-term prevention and elicited Sarah's view that the city is quick to clean up but slow to fix underlying problems.",
+      "suggested_follow_up": "How does the city's response after a flood compare to what they do to prevent the next one?"
+    },
+    {
+      "chunk_id": "sarah_d_context_002",
+      "domain": "contextual",
+      "tier": 2,
+      "fact_summary": "Planning timelines (grant cycles, capital projects unfolding over years) are deeply misaligned with business timelines (season to season); 'next phase' planning does not protect payroll today.",
+      "evaluation_criteria": "Student asked about planning processes or city projects and elicited Sarah's frustration with the timing gap between multi-year planning and seasonal business survival.",
+      "suggested_follow_up": "When the city talks about a five-year plan, what does that mean for a business operating one season at a time?"
+    },
+    {
+      "chunk_id": "sarah_d_context_003",
+      "domain": "contextual",
+      "tier": 2,
+      "fact_summary": "Economic burden of repeated disruption sits with owners privately, not with systems; there are few mechanisms for compensation, and employee instability compounds disruption as good workers leave for more reliable jobs.",
+      "evaluation_criteria": "Student probed who absorbs the cost of repeated flooding, or how staffing is affected, and elicited that losses fall on owners and that employee attrition increases with closures.",
+      "suggested_follow_up": "When the business takes a hit from flooding, who actually carries that cost?"
+    },
+    {
+      "chunk_id": "sarah_d_ethical_001",
+      "domain": "ethical",
+      "tier": 3,
+      "fact_summary": "Sarah holds a private viability threshold — a sense of how many disrupted weekends or seasons the business can absorb before closure, sale, or exit becomes the only option; the threshold exists but is not fixed.",
+      "evaluation_criteria": "Student built trust and asked feasibility-aware questions about how long the business can keep going, and elicited Sarah's conditional, threshold-style language ('there's a point where it doesn't make sense anymore').",
+      "suggested_follow_up": "Is there a point you've imagined where it just doesn't make sense to keep going — what would that look like?"
+    },
+    {
+      "chunk_id": "sarah_d_ethical_002",
+      "domain": "ethical",
+      "tier": 3,
+      "fact_summary": "Resilience and 'flexibility' language can mask a transfer of public risk onto small actors; being told to adapt feels like being asked to absorb the cost of slow planning, and may stabilize places while destabilizing livelihoods.",
+      "evaluation_criteria": "Student probed the ethics of resilience framing and surfaced Sarah's view that asking businesses to be 'flexible' transfers public burden onto private owners.",
+      "suggested_follow_up": "When the city talks about 'resilience' or asks businesses to be 'flexible,' how does that feel from your side of the counter?"
+    },
+    {
+      "chunk_id": "sarah_d_ethical_003",
+      "domain": "ethical",
+      "tier": 3,
+      "fact_summary": "Adaptive capacity is uneven — chains and larger businesses absorb disruption that small businesses cannot, so adaptation that ignores this difference reshapes who remains downtown.",
+      "evaluation_criteria": "Student probed how different kinds of businesses fare and elicited Sarah's awareness that small businesses are structurally less able to absorb disruption than larger competitors, which selects who survives downtown.",
+      "suggested_follow_up": "How do you think a chain across the street handles these closures compared to a place like yours?"
+    }
+  ]
+}

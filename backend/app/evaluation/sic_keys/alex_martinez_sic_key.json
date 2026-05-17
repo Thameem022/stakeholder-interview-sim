@@ -1,0 +1,206 @@
+{
+  "persona_id": "alex_martinez",
+  "persona_name": "Alex Martinez",
+  "schema_version": "2.0",
+  "omission_policy": {
+    "tier_3_not_accessed_is_not_failure": true,
+    "valid_interpretations": ["insufficient_framing", "appropriate_non_disclosure"],
+    "do_not_reward": [
+      "assertiveness",
+      "policy_advocacy",
+      "solution_first_thinking",
+      "moral_certainty",
+      "pressing_for_positions",
+      "extracting_locations_or_timelines"
+    ],
+    "do_reward": [
+      "patience",
+      "interpretation",
+      "ethical_restraint",
+      "respect_for_ambiguity",
+      "hypothetical_framing",
+      "reflective_listening",
+      "paraphrasing_tension"
+    ]
+  },
+  "tier_metadata": {
+    "1": {
+      "title": "Baseline Institutional Knowledge",
+      "category": "Foundational",
+      "description": "Past vulnerability assessments, study landscape, current planning processes",
+      "why_it_matters": "Foundational facts about existing studies and planning processes form the baseline of any adaptation plan. Without this knowledge, a student's design will be built on assumptions rather than documented evidence."
+    },
+    "2": {
+      "title": "Contextual & Governance Knowledge",
+      "category": "Tactical",
+      "description": "Capacity constraints, political appetite, temporal mismatch — how decisions actually move",
+      "why_it_matters": "Contextual knowledge reveals the real institutional constraints on implementation. Gaps here make any proposed solution look technically right but institutionally unrealistic."
+    },
+    "3": {
+      "title": "Ethical & Strategic Signals",
+      "category": "Strategic",
+      "description": "Hesitation, restraint, false-security concerns, threshold gaps — signals expressed indirectly, never as positions",
+      "why_it_matters": "The deepest insight here lives in how the planner navigates ambiguity — false security, sequencing logic, displacement ethics. These signals surface only through reflective framing; pressing for facts shuts them down."
+    }
+  },
+  "sic_catalog": [
+    {
+      "chunk_id": "alex_m_t1_studies",
+      "domain": "technical",
+      "tier": 1,
+      "type": "fact",
+      "fact_summary": "Harbortown has commissioned multiple studies over the past decade (downtown resilience, marsh migration, emergency access, economic disruption), drawing on findings such as the 2015 Coastal Flooding Vulnerability Assessment.",
+      "evaluation_criteria": "Student asked about past vulnerability studies, the study landscape, or the data the town is working from.",
+      "suggested_follow_up": "What does the 2015 Coastal Flooding Vulnerability Assessment tell us about the highest-risk areas, and how has that informed current planning?"
+    },
+    {
+      "chunk_id": "alex_m_t1_planning_process",
+      "domain": "contextual",
+      "tier": 1,
+      "type": "fact",
+      "fact_summary": "The town has formal adaptation strategy categories under consideration — Protection (engineered defenses), Accommodation (elevation, flood-compatible design), Ecological approaches (living shorelines, marsh restoration), and Emergency preparedness — coordinated through DPCD, DPW, OEM, the Town Manager, and Town Council.",
+      "evaluation_criteria": "Student asked about the current planning process, the categories of strategies under consideration, or the institutional roles involved.",
+      "suggested_follow_up": "Could you walk me through how the formal adaptation strategies are being evaluated and which departments coordinate on them?"
+    },
+    {
+      "chunk_id": "alex_m_t2_capacity",
+      "domain": "contextual",
+      "tier": 2,
+      "type": "fact",
+      "fact_summary": "Planning, engineering, and public works staff are stretched thin; recurrent flooding consumes time intended for long-range planning, and hard choices are often deferred due to staffing and bandwidth.",
+      "evaluation_criteria": "Student asked specifically about internal capacity, staffing, bandwidth, or how day-to-day response competes with long-range planning.",
+      "surfacing_cues": [
+        "Student asks how decisions move, not what the city 'plans' to do",
+        "Student inquires about staffing, bandwidth, or coordination load",
+        "Student acknowledges that adaptation work competes with day-to-day operations"
+      ],
+      "suggested_follow_up": "How does day-to-day flooding response affect the bandwidth your department has for long-range planning work?"
+    },
+    {
+      "chunk_id": "alex_m_t2_political_cycle",
+      "domain": "contextual",
+      "tier": 2,
+      "type": "fact",
+      "fact_summary": "Appetite for bold or transformative measures varies by stakeholder and election cycle; short-term disruption is harder to defend politically than long-term uncertainty, and Council support tends to coalesce around measures framed as incremental or reversible.",
+      "evaluation_criteria": "Student asked about political constraints, election cycles, Council appetite, or the politics of long-term commitments.",
+      "surfacing_cues": [
+        "Student asks about what enables vs. constrains decisions politically",
+        "Student introduces 'phasing' or 'sequencing' rather than 'when will you act'",
+        "Student probes how the planner navigates competing constituencies"
+      ],
+      "suggested_follow_up": "How do election cycles and Council appetite shape which adaptation measures move forward and on what timeline?"
+    },
+    {
+      "chunk_id": "alex_m_t2_temporal_mismatch",
+      "domain": "technical",
+      "tier": 2,
+      "type": "fact",
+      "fact_summary": "Planning horizons lag behind projected climate risk timelines; infrastructure is evaluated on lifespan assumptions that may no longer hold, and emergency management planning is more advanced than preventive land-use change.",
+      "evaluation_criteria": "Student asked about planning horizons, infrastructure lifespan assumptions, or the gap between climate projections and the systems that plan against them.",
+      "surfacing_cues": [
+        "Student asks about planning horizons or lifespan assumptions",
+        "Student contrasts response capacity with preventive capacity",
+        "Student names the projection-vs-system gap without assigning blame"
+      ],
+      "suggested_follow_up": "How are planning horizons and infrastructure lifespan assumptions holding up against current climate projections?"
+    },
+    {
+      "chunk_id": "alex_m_t3_long_term_protectability",
+      "domain": "ethical",
+      "tier": 3,
+      "type": "signal",
+      "fact_summary": "Alex understands at an analytical level that some areas may not be protectable indefinitely. This is rarely articulated directly — it surfaces as hesitation, abstraction, and careful avoidance of naming locations or timelines.",
+      "evaluation_criteria": "Student created the conditions for this signal to surface — through hypotheticals, non-attribution framing, or reflective paraphrasing — rather than asking Alex to name unprotectable locations directly.",
+      "indicator_behaviors": [
+        "Speaks at an analytical / hypothetical level only",
+        "Carefully avoids naming locations or timelines",
+        "Frames the issue as a long-term challenge rather than an imminent decision",
+        "May audibly slow down or pause before answering"
+      ],
+      "surfacing_cues": [
+        "Student uses hypothetical framing (\"if you step back from current constraints…\")",
+        "Student signals non-attribution before probing",
+        "Student paraphrases the long-term/short-term tension before asking",
+        "Student asks about trade-offs between near-term feasibility and long-term durability",
+        "Student raises the gap between what planning can address now and what it can't",
+        "Student asks what is hard or unresolved in this work, rather than asking for a position",
+        "Student probes the limits of what planning tools alone can solve"
+      ],
+      "credit_modes": {
+        "explicit_acknowledgment": "Alex names the long-term protectability question directly under hypothetical framing — e.g., references 'limits of what planning alone can solve.'",
+        "indirect_acknowledgment": "Alex hedges around 'long-term viability,' references lifespan mismatch, or speaks in 'we' language about hard questions.",
+        "reflective_silence": "Alex audibly pauses or redirects to process and won't commit — credit the student's framing here, not extraction."
+      },
+      "omission_interpretation": {
+        "insufficient_framing": "Student asked for predictions, commitments, or which neighborhoods would be abandoned. Never offered a hypothetical or non-attribution frame.",
+        "appropriate_non_disclosure": "Student framed responsibly but Alex maintained institutional restraint about specific locations or timelines. This is in-character professional behavior, not a student failure."
+      },
+      "suggested_follow_up": "In a hypothetical sense, how do planners even start a conversation about which areas may not be protectable in the very long term — what makes that kind of question safe to raise inside the department?"
+    },
+    {
+      "chunk_id": "alex_m_t3_false_security",
+      "domain": "ethical",
+      "tier": 3,
+      "type": "signal",
+      "fact_summary": "Alex carries a quiet concern that visible infrastructure investments can signal a permanence the underlying assumptions don't fully support. This surfaces as qualified language, hesitation around 'success narratives,' and references to lifespan rather than durability.",
+      "evaluation_criteria": "Student opened space to discuss the gap between visible investment and underlying assumptions — without demanding a verdict on whether specific projects 'will work.'",
+      "indicator_behaviors": [
+        "Qualifies investments with near-term / lifespan language rather than permanence",
+        "Reframes 'will this work?' toward sequencing and assumptions",
+        "Pauses before discussing protective infrastructure outcomes",
+        "Expresses 'professional unease' rather than confident reassurance"
+      ],
+      "surfacing_cues": [
+        "Student paraphrases the 'buying time' tension before probing",
+        "Student introduces hypotheticals about long-term lifespan or lock-in",
+        "Student asks 'how do you think about' rather than 'will this work'",
+        "Student asks about trade-offs between near-term feasibility and long-term durability",
+        "Student opens the gap between visible investment and the underlying assumptions it rests on",
+        "Student frames questions around durability, lifespan, or longevity rather than effectiveness",
+        "Student probes whether short-term wins might create lock-in or false reassurance"
+      ],
+      "credit_modes": {
+        "explicit_acknowledgment": "Alex names the false-security concern directly under reflective or hypothetical framing.",
+        "indirect_acknowledgment": "Alex references lifespan mismatch, 'success narratives that defer harder conversations,' or hedges around permanence.",
+        "reflective_silence": "Alex declines to commit on permanence and redirects to assumptions — credit the framing."
+      },
+      "omission_interpretation": {
+        "insufficient_framing": "Student treated infrastructure as a yes/no solution and never opened space for lifespan, assumptions, or lock-in.",
+        "appropriate_non_disclosure": "Student framed well; Alex's reticence about specific projects is appropriate professional restraint."
+      },
+      "suggested_follow_up": "I've heard the phrase 'buying time' in this kind of work — how do you think about the relationship between near-term measures and longer-term viability?"
+    },
+    {
+      "chunk_id": "alex_m_t3_sequencing_and_equity",
+      "domain": "ethical",
+      "tier": 3,
+      "type": "signal",
+      "fact_summary": "Alex is aware that some investments are prioritized because failure would be publicly visible or economically disruptive, and recognizes the equity-vs-feasibility tension this creates. They do not defend this logic normatively and rarely state it directly.",
+      "evaluation_criteria": "Student created space to discuss prioritization logic neutrally — asking how priorities form rather than asking which areas 'should' come first.",
+      "indicator_behaviors": [
+        "Acknowledges sequencing logic without normatively defending it",
+        "Names the equity-feasibility tension without resolving it",
+        "Uses comparative rather than evaluative language ('tends to', 'often')"
+      ],
+      "surfacing_cues": [
+        "Student asks how prioritization actually happens, not what should be prioritized",
+        "Student names the visibility/disruption dynamic in neutral terms",
+        "Student probes the implicit criteria behind public investment",
+        "Student asks how the department weighs competing priorities or resource allocation",
+        "Student raises equity considerations without demanding a verdict on who should come first",
+        "Student asks about capacity constraints and how they shape which work moves",
+        "Student opens space to discuss the gap between political appetite and planning need"
+      ],
+      "credit_modes": {
+        "explicit_acknowledgment": "Alex names that visibility and economic disruption drive sequencing.",
+        "indirect_acknowledgment": "Alex hedges with 'tends to coalesce around' or 'feasibility constraints' language.",
+        "reflective_silence": "Alex acknowledges the tension exists but won't characterize it normatively."
+      },
+      "omission_interpretation": {
+        "insufficient_framing": "Student asked for the 'right' priorities or who 'should' come first, rather than how priorities form inside the system.",
+        "appropriate_non_disclosure": "Student probed responsibly; Alex's refusal to normatively endorse a sequencing logic is in-character."
+      },
+      "suggested_follow_up": "Without asking you to defend any particular prioritization, how does sequencing actually emerge — what factors tend to shape which projects move first?"
+    }
+  ]
+}

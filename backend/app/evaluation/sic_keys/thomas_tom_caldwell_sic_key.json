@@ -1,0 +1,90 @@
+{
+  "persona_id": "thomas_tom_caldwell",
+  "persona_name": "Thomas \"Tom\" Caldwell",
+  "tier_metadata": {
+    "1": {
+      "title": "Technical, Regulatory, and Market Knowledge",
+      "category": "Technical",
+      "description": "Flood-risk standards, compliance, engineering responses, and the financing logic of waterfront development",
+      "why_it_matters": "Tom's technical fluency is the backbone of his perceived legitimacy and the lens through which he frames every project. Without surfacing this baseline, students will not understand the regulatory and financial logic actually shaping what gets built on the waterfront."
+    },
+    "2": {
+      "title": "Policy Ambiguity, Incentive Alignment, and System Lag",
+      "category": "Contextual",
+      "description": "Misalignment between zoning and climate strategy, the gap between current risk and future regulation, and emerging path dependency",
+      "why_it_matters": "These structural patterns reveal how 'compliant' development quietly shapes adaptation futures — through incentive lag, unsignaled risk, and growing political and economic claims. Missing this layer treats development as neutral when it is in fact directional."
+    },
+    "3": {
+      "title": "Ethical, Strategic, and System-Shaping Insight",
+      "category": "Strategic",
+      "description": "Why compliance is not sustainability, how capital sets de facto priorities, and quiet acknowledgment that adaptation limits are unresolved",
+      "why_it_matters": "Tom's most consequential knowledge is about how investment decisions made today narrow tomorrow's adaptation options — without anyone explicitly choosing that path. Failing to surface this misreads developers as villains and misses the structural way the system defers decisions to the market."
+    }
+  },
+  "sic_catalog": [
+    {
+      "chunk_id": "tom_c_tech_001",
+      "domain": "technical",
+      "tier": 1,
+      "fact_summary": "Tom is fluent in current flood-risk standards — floodplain zones, elevation and freeboard requirements, and waterfront building codes — and builds to those standards as a matter of routine.",
+      "evaluation_criteria": "Student asked competent questions about how projects address flood risk and elicited specific references to standards, codes, or compliance practices Tom follows.",
+      "suggested_follow_up": "What standards or codes are you actually building to on waterfront projects right now?"
+    },
+    {
+      "chunk_id": "tom_c_tech_002",
+      "domain": "technical",
+      "tier": 1,
+      "fact_summary": "Engineering responses (elevation, floodproofing, resilient materials, utility placement) combine with insurance and financing logic to determine what gets built — lenders and insurers price risk, and insurability is a gating factor for projects.",
+      "evaluation_criteria": "Student probed beyond physical design and surfaced Tom's account of how insurance, lender comfort, or risk-pricing constrains or enables waterfront development.",
+      "suggested_follow_up": "How do lenders and insurers feed into whether a waterfront project actually happens?"
+    },
+    {
+      "chunk_id": "tom_c_context_001",
+      "domain": "contextual",
+      "tier": 2,
+      "fact_summary": "Long-term adaptation goals are unresolved and zoning is not aligned with climate strategy; in the absence of clear negative signals (moratoria, retreat designations), developers read continued permission as a green light to proceed.",
+      "evaluation_criteria": "Student probed the gap between policy and development and elicited Tom's view that he responds to what is currently permitted because no formal 'stop' signal has been given.",
+      "suggested_follow_up": "What signals would the town actually have to send for you to stop building in a given area?"
+    },
+    {
+      "chunk_id": "tom_c_context_002",
+      "domain": "contextual",
+      "tier": 2,
+      "fact_summary": "Developers operate in the lag between present risk and future regulation; standards update slowly relative to conditions, and this gap advantages actors who can move quickly.",
+      "evaluation_criteria": "Student asked about the relationship between current standards and rising risk and elicited that Tom is aware the rules trail the conditions, and that moving quickly within the current framework is an explicit advantage.",
+      "suggested_follow_up": "How do you think about the gap between today's standards and the climate conditions actually arriving?"
+    },
+    {
+      "chunk_id": "tom_c_context_003",
+      "domain": "contextual",
+      "tier": 2,
+      "fact_summary": "New construction creates political and economic commitments that quietly narrow future adaptation options — once capital is in the ground, pressure to protect those assets accumulates and retreat becomes harder.",
+      "evaluation_criteria": "Student probed downstream consequences of waterfront investment and surfaced Tom's recognition that current building creates future claims on protection or public resources.",
+      "suggested_follow_up": "Once a project is built, how does that change what the town has to do to protect it later?"
+    },
+    {
+      "chunk_id": "tom_c_ethical_001",
+      "domain": "ethical",
+      "tier": 3,
+      "fact_summary": "Tom quietly understands that compliance does not equal sustainability — meeting current standards may not ensure long-term viability — but does not view it as his role to set sustainability thresholds; that judgment is deferred to policymakers.",
+      "evaluation_criteria": "Student engaged Tom at the level of system consequence rather than moral intention and elicited his acknowledgment that legal compliance and long-term sustainability are not the same thing.",
+      "suggested_follow_up": "Does building to current code feel like the same thing as building something sustainable to you, or are those different questions?"
+    },
+    {
+      "chunk_id": "tom_c_ethical_002",
+      "domain": "ethical",
+      "tier": 3,
+      "fact_summary": "Capital sets de facto priorities — where investment clusters, services and protection tend to follow — and this process is predictable, even when no one explicitly chooses it. Tom benefits from it without framing it as choice.",
+      "evaluation_criteria": "Student probed the directional effect of investment decisions and surfaced Tom's recognition that capital deployment shapes which areas get protected, without being framed as an intentional planning choice.",
+      "suggested_follow_up": "When investment concentrates in one area, what tends to follow it in terms of services or protection?"
+    },
+    {
+      "chunk_id": "tom_c_ethical_003",
+      "domain": "ethical",
+      "tier": 3,
+      "fact_summary": "Tom has a quiet unease that adaptation strategies are unresolved, some places will eventually face limits, and capital will move faster than planning to resolve them — formal systems are deferring those decisions to the market by default.",
+      "evaluation_criteria": "Student asked precise, non-accusatory questions about long-term resolution and elicited Tom's indirect acknowledgment that the system is letting the market decide what planning has not — rare statements such as 'someone needs to decide where investment should stop.'",
+      "suggested_follow_up": "If planning hasn't decided where the limits are, who actually is deciding right now?"
+    }
+  ]
+}

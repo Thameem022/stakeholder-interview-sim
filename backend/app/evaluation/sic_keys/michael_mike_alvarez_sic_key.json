@@ -1,0 +1,90 @@
+{
+  "persona_id": "michael_mike_alvarez",
+  "persona_name": "Michael \"Mike\" Alvarez",
+  "tier_metadata": {
+    "1": {
+      "title": "Lived Observational Knowledge",
+      "category": "Experiential",
+      "description": "Daily observations of how flooding has changed and how routines adjust",
+      "why_it_matters": "Mike's daily observations are the household-scale ground truth for climate impact in Harbortown. Without surfacing this lived baseline, any plan will frame the problem from a planning-document perspective rather than from the conditions residents actually live with."
+    },
+    "2": {
+      "title": "Informal Systems, Social Patterns, and Power",
+      "category": "Contextual",
+      "description": "Uneven visibility of harm, informal mutual aid, and the gap between resident time and planning time",
+      "why_it_matters": "Recurring patterns of attention, mutual aid, and slow institutional response reveal where formal systems quietly fail residents. Missing this layer makes a plan technically correct but socially blind to who is actually being protected."
+    },
+    "3": {
+      "title": "Ethical, Existential, and Decision-critical Insight",
+      "category": "Strategic",
+      "description": "Quiet displacement, loss of belonging, and the ethics of resilience language",
+      "why_it_matters": "Mike's most consequential knowledge is about the social loss that adaptation can produce even without catastrophic damage. Failing to elicit this risks recommendations that protect places while dissolving the communities that made them worth protecting."
+    }
+  },
+  "sic_catalog": [
+    {
+      "chunk_id": "mike_a_exp_001",
+      "domain": "experiential",
+      "tier": 1,
+      "fact_summary": "Flooding in East Harbor has become more frequent and less predictable; water now enters basements and crawl spaces during high tides that previously caused no issues, and floods occur without storms or during storms that 'don't feel that bad.'",
+      "evaluation_criteria": "Student asked open-ended questions about daily life or recent weather and elicited specific changes in flooding frequency, timing, or unpredictability.",
+      "suggested_follow_up": "How has the flooding around your home changed over the years you've lived here?"
+    },
+    {
+      "chunk_id": "mike_a_exp_002",
+      "domain": "experiential",
+      "tier": 1,
+      "fact_summary": "Mike knows which streets in East Harbor flood first and adjusts daily routines accordingly — moving the car based on tides, storing tools and appliances differently, and reshaping errands and work schedules around water conditions.",
+      "evaluation_criteria": "Student probed into household-level adaptation and elicited concrete routines or local knowledge Mike has built up about which places flood first or how he prepares.",
+      "suggested_follow_up": "Walk me through what a high-tide morning looks like at your house — what do you do differently?"
+    },
+    {
+      "chunk_id": "mike_a_context_001",
+      "domain": "contextual",
+      "tier": 2,
+      "fact_summary": "Downtown flooding receives faster attention and visible repairs than residential flooding in East Harbor; Mike perceives attention as linked to tourism, access, and money rather than to where harm is greatest.",
+      "evaluation_criteria": "Student asked about how response or repair compares across parts of town and elicited Mike's perception of uneven attention or prioritization between downtown and residential areas.",
+      "suggested_follow_up": "When something floods downtown versus on your block, do you notice a difference in how fast it gets dealt with?"
+    },
+    {
+      "chunk_id": "mike_a_context_002",
+      "domain": "contextual",
+      "tier": 2,
+      "fact_summary": "Residents rely on informal mutual aid — shared pumps, shared labor, shared knowledge — and often help each other before calling the city; this coping reduces visible crisis but accumulates as fatigue.",
+      "evaluation_criteria": "Student asked about how the neighborhood handles flooding events and surfaced the role of neighbors, shared resources, or informal help networks rather than only formal response.",
+      "suggested_follow_up": "When water comes up unexpectedly, who do you call first — neighbors or the city?"
+    },
+    {
+      "chunk_id": "mike_a_context_003",
+      "domain": "contextual",
+      "tier": 2,
+      "fact_summary": "Planning processes feel slow and repetitive relative to daily disruption — 'it's always another study' — and residents sense decisions are always coming later even as impacts arrive now.",
+      "evaluation_criteria": "Student probed Mike's view of city planning or engagement processes and elicited frustration with timelines, repeated studies, or a felt disconnect between planning pace and lived urgency.",
+      "suggested_follow_up": "How do the city's planning timelines feel from where you're sitting?"
+    },
+    {
+      "chunk_id": "mike_a_ethical_001",
+      "domain": "ethical",
+      "tier": 3,
+      "fact_summary": "Mike fears quiet displacement — being 'pushed out without being told' through rising costs, repeated damage, and fatigue rather than through any explicit decision; he worries the town will adapt around him rather than with him.",
+      "evaluation_criteria": "Student built trust and explicitly probed long-term futures, the possibility of leaving, or how residents might be displaced indirectly; Mike's fear of quiet displacement was surfaced.",
+      "suggested_follow_up": "When you think about the next ten or fifteen years here, what worries you most about staying?"
+    },
+    {
+      "chunk_id": "mike_a_ethical_002",
+      "domain": "ethical",
+      "tier": 3,
+      "fact_summary": "The hardest loss is not water damage but loss of belonging — the uncertainty about whether staying still counts. Words like 'flexibility' and 'transition' from officials feel like judgments on his right to be there, and leaving would feel like erasure, not relocation.",
+      "evaluation_criteria": "Student engaged with the emotional and identity dimensions of place, and elicited Mike's sense that adaptation conversations carry an implicit judgment on his presence or belonging.",
+      "suggested_follow_up": "When officials talk about 'flexibility' or 'transition' for this neighborhood, how does that land for you?"
+    },
+    {
+      "chunk_id": "mike_a_ethical_003",
+      "domain": "ethical",
+      "tier": 3,
+      "fact_summary": "Mike has moral unease that resilience language shifts public risk onto residents privately and that protection strategies are selective — adaptation may protect places while dissolving the communities living in them, and endurance can be mistaken for consent.",
+      "evaluation_criteria": "Student probed the ethics of resilience or adaptation framing and surfaced Mike's critique that being told flooding is 'manageable' transfers burden onto residents or treats their endurance as agreement.",
+      "suggested_follow_up": "When you hear the word 'resilience' applied to your neighborhood, what do you hear underneath that?"
+    }
+  ]
+}
