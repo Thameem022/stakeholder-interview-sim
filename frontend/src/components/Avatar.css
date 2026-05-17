@@ -1,0 +1,52 @@
+.avatar-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 1rem 0;
+  position: relative;
+}
+
+.avatar-image {
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  transition: box-shadow 0.3s;
+}
+
+.avatar-placeholder {
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6b7280 0%, #374151 100%);
+  color: white;
+  font-size: 64px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+
+.avatar-mouth {
+  width: 50px;
+  height: 14px;
+  background: #1f2937;
+  border-radius: 7px;
+  margin-top: -32px;
+  margin-bottom: 16px;
+  transform-origin: center;
+  transition: transform 0.05s ease-out;
+  opacity: 0.85;
+}
+
+.avatar-mouth.speaking {
+  background: #111827;
+}
+
+.avatar-name {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #374151;
+}
