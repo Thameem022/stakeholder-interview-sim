@@ -40,4 +40,49 @@ export const healthCheck = async () => {
   return data
 }
 
+export interface RealtimeToken {
+  ephemeral_key: string
+  session_id: string
+  model: string
+}
+
+export const getRealtimeToken = async (
+  personaId: string,
+  voiceId?: string,
+  sessionId?: string
+): Promise<RealtimeToken> => {
+  const { data } = await apiClient.post('/api/realtime/token', {
+    persona_id: personaId,
+    voice_id: voiceId,
+    session_id: sessionId,
+  })
+  return data
+}
+
+export const postRetrieve = async (
+  personaId: string,
+  query: string
+): Promise<{ text: string }> => {
+  const { data } = await apiClient.post('/api/realtime/retrieve', {
+    persona_id: personaId,
+    query,
+  })
+  return data
+}
+
+export const postTranscript = async (
+  sessionId: string,
+  role: 'user' | 'assistant',
+  text: string,
+  ended?: boolean
+): Promise<{ ok: boolean; turns: number }> => {
+  const { data } = await apiClient.post('/api/realtime/transcript', {
+    session_id: sessionId,
+    role,
+    text,
+    ended,
+  })
+  return data
+}
+
 export default apiClient

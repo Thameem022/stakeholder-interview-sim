@@ -19,7 +19,8 @@ from app.api.health import router as health_router
 from app.api.personas import router as personas_router
 from app.config import settings
 from app.db import close_pool, init_pool
-from app.realtime.ws import router as realtime_router
+from app.realtime.retrieve import router as realtime_retrieve_router
+from app.realtime.token import router as realtime_token_router
 
 
 @asynccontextmanager
@@ -42,7 +43,8 @@ app.add_middleware(
 app.include_router(health_router, prefix="/api")
 app.include_router(personas_router, prefix="/api")
 app.include_router(eval_router, prefix="/api")
-app.include_router(realtime_router)
+app.include_router(realtime_token_router, prefix="/api")
+app.include_router(realtime_retrieve_router, prefix="/api")
 
 static_dir = Path(__file__).parent.parent / "static"
 if static_dir.exists():
