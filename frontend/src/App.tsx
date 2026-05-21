@@ -34,12 +34,36 @@ function InterviewView() {
     }
   }
 
+  const handleReset = () => {
+    if (session.status !== 'idle') session.end()
+    setSelected('')
+    setScoring(false)
+  }
+
   const personaName = personas.find((p) => p.key === selected)?.display_name || selected
+  const showViewScore = !!session.sessionId && session.status === 'idle' && !scoring
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
       <main className="max-w-3xl mx-auto p-6">
+        <div className="flex justify-end gap-2 mb-4">
+          {showViewScore && (
+            <button
+              onClick={() => navigate(`/score/${session.sessionId}`)}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700"
+            >
+              View score report
+            </button>
+          )}
+          <button
+            onClick={handleReset}
+            disabled={scoring}
+            className="px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-100 disabled:opacity-50"
+          >
+            Reset
+          </button>
+        </div>
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">Persona</label>
           <select
