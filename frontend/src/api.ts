@@ -35,6 +35,11 @@ export const evalSic = async (sessionId: string) => {
   return data
 }
 
+export const getLatestEvaluation = async (sessionId: string) => {
+  const { data } = await apiClient.get(`/api/eval/sessions/${sessionId}/latest`)
+  return data
+}
+
 export const healthCheck = async () => {
   const { data } = await apiClient.get('/api/health')
   return data

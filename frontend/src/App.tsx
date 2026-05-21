@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import { Avatar, Header } from './components'
 import { useRealtimeSession } from './hooks/useRealtimeSession'
 import { Persona, evalIqr, getPersonas } from './api'
@@ -8,6 +8,8 @@ import ScorePage from './ScorePage'
 function InterviewView() {
   const [personas, setPersonas] = useState<Persona[]>([])
   const [selected, setSelected] = useState<string>('')
+  const [scoring, setScoring] = useState(false)
+  const navigate = useNavigate()
 
   useEffect(() => {
     getPersonas().then(setPersonas).catch(() => setPersonas([]))
@@ -18,14 +20,17 @@ function InterviewView() {
   const handleEnd = async () => {
     const sid = session.sessionId
     session.end()
-    if (sid) {
-      try {
-        const result = await evalIqr(sid)
-        console.log('IQR result', result)
-        alert('Interview ended. IQR scoring complete (see console).')
-      } catch (e) {
-        console.error('IQR eval failed', e)
-      }
+    if (!sid) return
+    setScoring(true)
+    try {
+      const result = await evalIqr(sid)
+      navigate(`/score/${sid}`, { state: { evaluation: result } })
+    } catch (e: any) {
+      navigate(`/score/${sid}`, {
+        state: { evaluation: null, error: e?.message ?? String(e) },
+      })
+    } finally {
+      setScoring(false)
     }
   }
 
@@ -76,10 +81,14 @@ function InterviewView() {
               {session.status === 'live' && (
                 <button
                   onClick={handleEnd}
-                  className="px-6 py-3 bg-red-600 text-white rounded-md font-medium hover:bg-red-700"
+                  disabled={scoring}
+                  className="px-6 py-3 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 disabled:bg-red-400"
                 >
-                  End interview
+                  {scoring ? 'Scoring…' : 'End interview'}
                 </button>
+              )}
+              {session.status !== 'live' && scoring && (
+                <div className="px-6 py-3 text-gray-600">Scoring interview…</div>
               )}
             </div>
 
@@ -96,17 +105,6 @@ function InterviewView() {
 
             {session.error && (
               <div className="mt-4 p-3 bg-red-50 text-red-800 rounded-md">{session.error}</div>
-            )}
-
-            {session.sessionId && (
-              <div className="mt-6 text-center">
-                <Link
-                  to={`/score/${session.sessionId}`}
-                  className="text-blue-600 hover:underline text-sm"
-                >
-                  View score report
-                </Link>
-              </div>
             )}
           </>
         )}
