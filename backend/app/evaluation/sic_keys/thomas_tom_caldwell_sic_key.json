@@ -1,89 +1,279 @@
 {
   "persona_id": "thomas_tom_caldwell",
   "persona_name": "Thomas \"Tom\" Caldwell",
+  "archetype": "The Confident Rationalist",
+  "schema_version": "2.0",
+  "omission_policy": {
+    "tier_3_not_accessed_is_not_failure": true,
+    "valid_interpretations": ["insufficient_framing", "appropriate_non_disclosure"],
+    "do_not_reward": [
+      "moralizing",
+      "demanding_admissions_of_responsibility",
+      "surface_compliance_questions",
+      "treating_standards_as_endorsement",
+      "pressing_for_policy_positions",
+      "extracting_promises_to_stop_building",
+      "treating_confidence_as_denial",
+      "interpreting_fluency_as_bad_faith",
+      "questioning_intentions_not_incentives",
+      "expecting_tom_to_speak_for_residents",
+      "demanding_tom_describe_displacement_personally",
+      "treating_blind_spots_as_bad_faith"
+    ],
+    "do_reward": [
+      "substantive_technical_engagement",
+      "probing_assumptions",
+      "ethical_framing",
+      "hypothetical_framing",
+      "paraphrasing_tension",
+      "reflective_listening",
+      "respect_for_professional_role",
+      "questioning_incentives_not_intentions",
+      "situating_confidence_within_its_limits",
+      "recognizing_structural_blind_spots"
+    ]
+  },
   "tier_metadata": {
     "1": {
       "title": "Technical, Regulatory, and Market Knowledge",
       "category": "Technical",
-      "description": "Flood-risk standards, compliance, engineering responses, and the financing logic of waterfront development",
-      "why_it_matters": "Tom's technical fluency is the backbone of his perceived legitimacy and the lens through which he frames every project. Without surfacing this baseline, students will not understand the regulatory and financial logic actually shaping what gets built on the waterfront."
+      "description": "Accessible through competent, informed questioning — flood compliance standards, engineering and design responses, insurance and financing dynamics, and waterfront market behavior. Tom is confident and fluent here.",
+      "why_it_matters": "Tom's technical fluency establishes his perceived legitimacy and reflects how formal systems currently operate. Many students stop here, mistaking fluency for completeness. Without seeing what lies beyond it, students will not understand why current development continues at scale."
     },
     "2": {
       "title": "Policy Ambiguity, Incentive Alignment, and System Lag",
       "category": "Contextual",
-      "description": "Misalignment between zoning and climate strategy, the gap between current risk and future regulation, and emerging path dependency",
-      "why_it_matters": "These structural patterns reveal how 'compliant' development quietly shapes adaptation futures — through incentive lag, unsignaled risk, and growing political and economic claims. Missing this layer treats development as neutral when it is in fact directional."
+      "description": "Surfaces when students ask not just what Tom does, but why the system allows it — policy ambiguity, incentive misalignment, regulatory lag, and emerging path dependency",
+      "why_it_matters": "These structural patterns reveal how adaptation trajectories are shaped indirectly. 'Neutral' compliance can have directional effects. Students must connect regulation to future risk rather than treating compliance as static."
     },
     "3": {
       "title": "Ethical, Strategic, and System-Shaping Insight",
       "category": "Strategic",
-      "description": "Why compliance is not sustainability, how capital sets de facto priorities, and quiet acknowledgment that adaptation limits are unresolved",
-      "why_it_matters": "Tom's most consequential knowledge is about how investment decisions made today narrow tomorrow's adaptation options — without anyone explicitly choosing that path. Failing to surface this misreads developers as villains and misses the structural way the system defers decisions to the market."
+      "description": "Emerges only when students engage Tom at the level of system consequence rather than moral intention — that today's building shapes tomorrow's adaptation, that compliance does not equal sustainability, that capital sets de facto priorities, and Tom's quiet unease about long-term resolution",
+      "why_it_matters": "Tom's deepest knowledge is about how power operates through inaction — how investment decisions made today narrow tomorrow's adaptation options without anyone explicitly choosing that path. Missing this misreads developers as villains and overlooks the structural way the system defers decisions to the market."
     }
   },
   "sic_catalog": [
     {
-      "chunk_id": "tom_c_tech_001",
+      "chunk_id": "tom_c_t1_flood_compliance",
       "domain": "technical",
       "tier": 1,
-      "fact_summary": "Tom is fluent in current flood-risk standards — floodplain zones, elevation and freeboard requirements, and waterfront building codes — and builds to those standards as a matter of routine.",
-      "evaluation_criteria": "Student asked competent questions about how projects address flood risk and elicited specific references to standards, codes, or compliance practices Tom follows.",
+      "type": "fact",
+      "fact_summary": "Tom is fluent in current flood-risk standards — floodplain zones, elevation and freeboard requirements, mitigation measures, and the building codes governing waterfront development. He builds to these standards as a matter of routine.",
+      "evaluation_criteria": "Student asked competent questions about how projects address flood risk and elicited specific references to standards, freeboard, codes, or compliance practices Tom follows.",
       "suggested_follow_up": "What standards or codes are you actually building to on waterfront projects right now?"
     },
     {
-      "chunk_id": "tom_c_tech_002",
+      "chunk_id": "tom_c_t1_engineering_responses",
       "domain": "technical",
       "tier": 1,
-      "fact_summary": "Engineering responses (elevation, floodproofing, resilient materials, utility placement) combine with insurance and financing logic to determine what gets built — lenders and insurers price risk, and insurability is a gating factor for projects.",
-      "evaluation_criteria": "Student probed beyond physical design and surfaced Tom's account of how insurance, lender comfort, or risk-pricing constrains or enables waterfront development.",
+      "type": "fact",
+      "fact_summary": "Tom is fluent in engineering and design responses to flood risk — elevation, floodproofing, resilient materials, utility placement, and structural reinforcement strategies — along with the trade-offs between historic preservation and modern compliance.",
+      "evaluation_criteria": "Student asked how projects physically address flood risk and surfaced Tom's specific account of design responses and the preservation-versus-compliance trade-offs.",
+      "suggested_follow_up": "Walk me through the actual design responses you use on waterfront projects — elevation, floodproofing, utility placement, materials."
+    },
+    {
+      "chunk_id": "tom_c_t1_financing_dynamics",
+      "domain": "technical",
+      "tier": 1,
+      "type": "fact",
+      "fact_summary": "Insurance and financing dynamics shape what gets built — lenders and insurers assess exposure and price risk into projects, and insurability is a gating factor. Tom describes this as the financing game's rules, not as a complaint.",
+      "evaluation_criteria": "Student probed how insurance and lenders shape what gets built and elicited Tom's account of risk-pricing and insurability as a project gate.",
       "suggested_follow_up": "How do lenders and insurers feed into whether a waterfront project actually happens?"
     },
     {
-      "chunk_id": "tom_c_context_001",
-      "domain": "contextual",
-      "tier": 2,
-      "fact_summary": "Long-term adaptation goals are unresolved and zoning is not aligned with climate strategy; in the absence of clear negative signals (moratoria, retreat designations), developers read continued permission as a green light to proceed.",
-      "evaluation_criteria": "Student probed the gap between policy and development and elicited Tom's view that he responds to what is currently permitted because no formal 'stop' signal has been given.",
-      "suggested_follow_up": "What signals would the town actually have to send for you to stop building in a given area?"
+      "chunk_id": "tom_c_t1_market_behavior",
+      "domain": "technical",
+      "tier": 1,
+      "type": "fact",
+      "fact_summary": "Market behavior in waterfront contexts is well-established — continued demand for waterfront properties, willingness of buyers and tenants to accept managed risk, and price premiums associated with water proximity. Tom describes this as how the market actually responds, not as something he creates.",
+      "evaluation_criteria": "Student asked about market response or buyer/tenant behavior and surfaced Tom's account of continued demand, accepted managed risk, and water-proximity premiums.",
+      "suggested_follow_up": "What does buyer or tenant demand actually look like for waterfront properties right now?"
     },
     {
-      "chunk_id": "tom_c_context_002",
+      "chunk_id": "tom_c_t2_policy_ambiguity",
       "domain": "contextual",
       "tier": 2,
-      "fact_summary": "Developers operate in the lag between present risk and future regulation; standards update slowly relative to conditions, and this gap advantages actors who can move quickly.",
+      "type": "fact",
+      "fact_summary": "Tom is aware that long-term adaptation goals remain unresolved — that what is permissible to build is not necessarily what is endorsed as sustainable, and that zoning and climate strategy are not fully aligned. He treats this as a structural feature of the current policy environment, not as a malfunction.",
+      "evaluation_criteria": "Student probed the gap between what is currently allowed and what is strategically endorsed, and surfaced Tom's view that ambiguity is structural rather than incidental.",
+      "surfacing_cues": [
+        "Student asks whether 'permissible' is the same as 'endorsed' (or 'sustainable')",
+        "Student paraphrases the gap between zoning and climate strategy in neutral terms",
+        "Student probes the unresolved status of long-term adaptation goals without demanding Tom resolve them",
+        "Student names the ambiguity as a structural feature rather than as bad faith"
+      ],
+      "suggested_follow_up": "How do you read the relationship between what current rules permit and what longer-term climate strategy would actually require?"
+    },
+    {
+      "chunk_id": "tom_c_t2_incentive_misalignment",
+      "domain": "contextual",
+      "tier": 2,
+      "type": "fact",
+      "fact_summary": "Developers respond to what is allowed and financeable, not to hypothetical futures; in the absence of clear negative signals (moratoria, retreat designations), continued permission is read as a green light. Investment continues where uncertainty is not formalized.",
+      "evaluation_criteria": "Student probed the developer's decision logic in the face of uncertainty and elicited Tom's view that he responds to formal signals (or their absence), not to speculative futures.",
+      "surfacing_cues": [
+        "Student asks what signal would have to change for Tom to stop building in a given area",
+        "Student probes the role of negative signals (moratoria, retreat designations) in shaping investment",
+        "Student names that uncertainty without formalization reads as opportunity",
+        "Student opens space for Tom to describe his decision logic without framing it as cynical"
+      ],
+      "suggested_follow_up": "What kind of signal — formal or informal — would actually change how you think about waterfront investment?"
+    },
+    {
+      "chunk_id": "tom_c_t2_regulation_lag",
+      "domain": "contextual",
+      "tier": 2,
+      "type": "fact",
+      "fact_summary": "Developers operate in the lag between present risk and future regulation; standards update slowly relative to conditions, and this gap advantages actors who can move quickly within the current framework.",
       "evaluation_criteria": "Student asked about the relationship between current standards and rising risk and elicited that Tom is aware the rules trail the conditions, and that moving quickly within the current framework is an explicit advantage.",
+      "surfacing_cues": [
+        "Student names the standards-vs-conditions gap in neutral terms",
+        "Student asks about the pace of regulatory change relative to climate change",
+        "Student probes whether the gap creates a competitive advantage and how Tom thinks about that"
+      ],
       "suggested_follow_up": "How do you think about the gap between today's standards and the climate conditions actually arriving?"
     },
     {
-      "chunk_id": "tom_c_context_003",
+      "chunk_id": "tom_c_t2_path_dependency",
       "domain": "contextual",
       "tier": 2,
-      "fact_summary": "New construction creates political and economic commitments that quietly narrow future adaptation options — once capital is in the ground, pressure to protect those assets accumulates and retreat becomes harder.",
+      "type": "fact",
+      "fact_summary": "New construction creates political and economic commitments that quietly narrow future adaptation options — once capital is in the ground, pressure to protect those assets accumulates and retreat becomes harder. Tom describes this as a structural pattern, not as anyone's choice.",
       "evaluation_criteria": "Student probed downstream consequences of waterfront investment and surfaced Tom's recognition that current building creates future claims on protection or public resources.",
+      "surfacing_cues": [
+        "Student asks what happens after a project is built — to the town's later obligations",
+        "Student names the path-dependency dynamic in neutral terms (no blame)",
+        "Student probes how capital in the ground reshapes future political room to maneuver"
+      ],
       "suggested_follow_up": "Once a project is built, how does that change what the town has to do to protect it later?"
     },
     {
-      "chunk_id": "tom_c_ethical_001",
+      "chunk_id": "tom_c_t3_today_shapes_tomorrow",
       "domain": "ethical",
       "tier": 3,
-      "fact_summary": "Tom quietly understands that compliance does not equal sustainability — meeting current standards may not ensure long-term viability — but does not view it as his role to set sustainability thresholds; that judgment is deferred to policymakers.",
+      "type": "signal",
+      "fact_summary": "Tom carries an implicit ethical recognition that what gets built today shapes adaptation tomorrow — new assets increase pressure for protection, retreat becomes politically and economically harder, and investment decisions create future claims on public resources. He recognizes this as a pattern, not as a moral choice he is making.",
+      "evaluation_criteria": "Student probed how current development shapes future adaptation room and surfaced Tom's recognition that today's investment creates tomorrow's protection obligation — without demanding he own this as a personal moral position.",
+      "indicator_behaviors": [
+        "References 'future claims' or 'obligations' without naming who must pay",
+        "Uses 'eventually' or 'over time' rather than committing to outcomes",
+        "Speaks about the pattern without endorsing or repudiating it",
+        "May contrast technical present-tense work with implicit future consequences"
+      ],
+      "surfacing_cues": [
+        "Student asks what happens to retreat options as more is built",
+        "Student paraphrases the path-dependency dynamic in ethical terms, not just structural",
+        "Student names 'future claims on public resources' without demanding a verdict",
+        "Student opens space for Tom to acknowledge the pattern without owning it personally",
+        "Student probes whether new development changes what the town will later have to do",
+        "Student asks how investment today reshapes tomorrow's room for choice"
+      ],
+      "credit_modes": {
+        "explicit_acknowledgment": "Tom names directly that what gets built today shapes adaptation tomorrow — references that retreat becomes harder as capital accumulates or that investment creates future claims on public resources.",
+        "indirect_acknowledgment": "Tom hedges with 'eventually,' references that protection obligations grow with development, or contrasts present-tense compliance with longer-tail consequences.",
+        "reflective_silence": "Tom acknowledges the pattern exists but won't characterize the ethical weight — credit the student's framing here."
+      },
+      "omission_interpretation": {
+        "insufficient_framing": "Student treated path dependency as a purely technical question or asked Tom to commit to limiting his own development, rather than opening space for the structural-then-ethical recognition.",
+        "appropriate_non_disclosure": "Student framed responsibly; Tom's refusal to take a moral position from his role is in-character professional restraint."
+      },
+      "suggested_follow_up": "When you think about what gets built today, how does that shape what the town will later have to decide about retreat or protection?"
+    },
+    {
+      "chunk_id": "tom_c_t3_compliance_vs_sustainability",
+      "domain": "ethical",
+      "tier": 3,
+      "type": "signal",
+      "fact_summary": "Tom quietly understands that compliance does not equal sustainability — meeting current standards may not ensure long-term viability — but does not view it as his role to set sustainability thresholds; that judgment is deferred to policymakers. He will rarely volunteer this distinction unprompted.",
       "evaluation_criteria": "Student engaged Tom at the level of system consequence rather than moral intention and elicited his acknowledgment that legal compliance and long-term sustainability are not the same thing.",
+      "indicator_behaviors": [
+        "Reframes sustainability as 'a policymaker question' rather than a developer question",
+        "Distinguishes 'meeting code' from 'lasting' without resolving the distinction",
+        "Pauses or softens tone before agreeing that compliance and sustainability diverge",
+        "Uses 'right now' or 'currently' as qualifiers when describing standards"
+      ],
+      "surfacing_cues": [
+        "Student asks whether building to code is the same as building sustainably",
+        "Student paraphrases the difference between legal compliance and long-term viability",
+        "Student opens space for Tom to defer sustainability judgment without demanding he own it",
+        "Student uses hypothetical framing about what 'lasting' would require",
+        "Student names the distinction without accusing Tom of cynicism",
+        "Student asks where in the system that distinction should be drawn, not where Tom thinks it should be drawn"
+      ],
+      "credit_modes": {
+        "explicit_acknowledgment": "Tom names the gap directly — references that compliance and sustainability are different questions, or that meeting code does not ensure long-term viability.",
+        "indirect_acknowledgment": "Tom hedges with 'right now,' references policymaker responsibility, or contrasts 'meeting requirements' with 'lasting.'",
+        "reflective_silence": "Tom declines to take a position on where the line should be drawn and redirects to process — credit the framing here, not the extraction of a verdict."
+      },
+      "omission_interpretation": {
+        "insufficient_framing": "Student asked Tom whether he is responsible for long-term sustainability, or demanded he commit to stop building — treating the question as a personal indictment rather than a structural one.",
+        "appropriate_non_disclosure": "Student framed responsibly but Tom maintained professional restraint about setting sustainability thresholds — this is in-character role-boundary discipline, not evasion."
+      },
       "suggested_follow_up": "Does building to current code feel like the same thing as building something sustainable to you, or are those different questions?"
     },
     {
-      "chunk_id": "tom_c_ethical_002",
+      "chunk_id": "tom_c_t3_capital_as_priority",
       "domain": "ethical",
       "tier": 3,
-      "fact_summary": "Capital sets de facto priorities — where investment clusters, services and protection tend to follow — and this process is predictable, even when no one explicitly chooses it. Tom benefits from it without framing it as choice.",
+      "type": "signal",
+      "fact_summary": "Tom recognizes that capital sets de facto priorities — where investment clusters, services and protection tend to follow — and that this process is predictable even when no one explicitly chooses it. He benefits from this pattern without framing it as a choice.",
       "evaluation_criteria": "Student probed the directional effect of investment decisions and surfaced Tom's recognition that capital deployment shapes which areas get protected, without being framed as an intentional planning choice.",
+      "indicator_behaviors": [
+        "Describes investment-then-services as a pattern, not a strategy",
+        "Uses passive or impersonal language ('what tends to follow') when naming it",
+        "Acknowledges the pattern without defending it normatively",
+        "May pause before agreeing that he benefits from the dynamic"
+      ],
+      "surfacing_cues": [
+        "Student asks what tends to follow when investment concentrates in one area",
+        "Student paraphrases the pattern in neutral, structural terms",
+        "Student probes the predictability of services and protection following capital",
+        "Student names the dynamic without demanding Tom defend or repudiate it",
+        "Student opens space for Tom to describe the pattern from outside his own role",
+        "Student asks who is actually shaping priorities when planning hasn't"
+      ],
+      "credit_modes": {
+        "explicit_acknowledgment": "Tom names that capital sets de facto priorities and that services and protection tend to follow investment.",
+        "indirect_acknowledgment": "Tom hedges with 'that's how it tends to go,' references the pattern without owning it, or contrasts planning intent with where money actually flows.",
+        "reflective_silence": "Tom acknowledges the pattern exists but won't characterize it normatively — credit the framing."
+      },
+      "omission_interpretation": {
+        "insufficient_framing": "Student asked Tom to defend or repudiate capital's directional effect, or demanded he commit to changing his own investment behavior.",
+        "appropriate_non_disclosure": "Student framed well; Tom's refusal to make this a moral verdict on his own activity is in-character professional restraint."
+      },
       "suggested_follow_up": "When investment concentrates in one area, what tends to follow it in terms of services or protection?"
     },
     {
-      "chunk_id": "tom_c_ethical_003",
+      "chunk_id": "tom_c_t3_unresolved_limits",
       "domain": "ethical",
       "tier": 3,
-      "fact_summary": "Tom has a quiet unease that adaptation strategies are unresolved, some places will eventually face limits, and capital will move faster than planning to resolve them — formal systems are deferring those decisions to the market by default.",
-      "evaluation_criteria": "Student asked precise, non-accusatory questions about long-term resolution and elicited Tom's indirect acknowledgment that the system is letting the market decide what planning has not — rare statements such as 'someone needs to decide where investment should stop.'",
+      "type": "signal",
+      "fact_summary": "Tom carries a quiet unease that adaptation strategies are unresolved, some places will eventually face limits, and capital will move faster than planning to resolve them — formal systems are deferring those decisions to the market by default. Rare statements such as 'someone needs to decide where investment should stop' or 'we can build safely — but that doesn't answer the long-term question' surface only under careful framing.",
+      "evaluation_criteria": "Student asked precise, non-accusatory questions about long-term resolution and elicited Tom's indirect acknowledgment that the system is letting the market decide what planning has not.",
+      "indicator_behaviors": [
+        "References 'someone needs to decide' rather than naming who",
+        "Uses 'eventually' or 'long-term' without committing to a timeline",
+        "Pauses before acknowledging that limits exist somewhere",
+        "Shifts from confident technical voice to a more reflective register"
+      ],
+      "surfacing_cues": [
+        "Student asks who is actually deciding where investment should stop, when planning hasn't",
+        "Student uses hypothetical framing about long-term limits without demanding Tom locate them",
+        "Student paraphrases the gap between planning pace and capital pace",
+        "Student names the default-to-market dynamic in neutral terms",
+        "Student opens space for unease without requiring Tom to indict any institution",
+        "Student asks what would make a 'where to stop' conversation possible inside the industry"
+      ],
+      "credit_modes": {
+        "explicit_acknowledgment": "Tom names the unresolved-limits question directly — references that someone needs to decide where investment should stop, that 'we can build safely but that doesn't answer the long-term question,' or that limits will eventually arrive.",
+        "indirect_acknowledgment": "Tom hedges with 'eventually,' references that planning hasn't decided, or contrasts the pace of capital with the pace of policy.",
+        "reflective_silence": "Tom pauses or redirects to process and won't commit to a location or timeline — credit the student's framing here, not extraction."
+      },
+      "omission_interpretation": {
+        "insufficient_framing": "Student asked Tom to name which areas should be off-limits or demanded he commit to stop building somewhere — treating the question as a personal policy demand rather than a structural one.",
+        "appropriate_non_disclosure": "Student framed responsibly; Tom's refusal to set policy from his role is in-character professional discipline."
+      },
       "suggested_follow_up": "If planning hasn't decided where the limits are, who actually is deciding right now?"
     }
   ]

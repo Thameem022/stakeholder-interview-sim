@@ -1,0 +1,23 @@
+[Unit]
+Description=Stakeholder Engagement Simulator (FastAPI + WebRTC realtime)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+User=thameem
+Group=www-data
+WorkingDirectory=/opt/stakeholder-engagement-simulator/backend
+EnvironmentFile=/opt/stakeholder-engagement-simulator/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=UV_PROJECT_ENVIRONMENT=/opt/stakeholder-engagement-simulator/backend/.venv
+
+# uvicorn via the uv-managed venv. Port 8001 so we don't collide with the
+# legacy interviewsimulator service on 8000.
+ExecStart=/opt/stakeholder-engagement-simulator/backend/.venv/bin/uvicorn app.main:app \
+  --host 127.0.0.1 --port 8001 --proxy-headers --forwarded-allow-ips=127.0.0.1
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
