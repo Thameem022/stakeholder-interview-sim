@@ -28,6 +28,9 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 
+# Office lockfiles (created automatically when a .docx/.xlsx is open)
+~$*
+
 # Linting cache
 .ruff_cache/
 
@@ -36,6 +39,9 @@ Thumbs.db
 *.pkl
 interview_transcripts/
 static/
+
+# Local-only reference copy of the prior IQR/SIC application — do not push
+Refefrence-to-iqr-sic/
 
 # Docker
 *.log

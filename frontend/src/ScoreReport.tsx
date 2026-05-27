@@ -263,12 +263,6 @@ const DIMENSION_EMOJI: Record<string, string> = {
   'Ethical Conduct':      '⚖️',
 };
 
-const DEFAULT_NEXT_ACTIONS = [
-  'Ask at least 2 open-ended questions per topic.',
-  'Follow up once on every stakeholder concern.',
-  'Avoid interrupting stakeholder responses.',
-];
-
 // ── Status colour tokens ──
 // `not_accessed_insufficient_framing` is the developmental gray.
 // `not_accessed_appropriate_restraint` is soft slate — indicates in-character
@@ -1099,8 +1093,6 @@ export default function ScoreReport({ evaluation, onClose }: ScoreReportProps) {
     ...results.filter(r => !DIMENSION_ORDER.includes(r.dimension_name)),
   ];
 
-  const actions = DEFAULT_NEXT_ACTIONS;
-
   return (
     <div style={{ minHeight: '100vh', background: T.pageBg, fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif" }}>
       <div style={{ padding: '2rem 2.5rem' }}>
@@ -1251,31 +1243,6 @@ export default function ScoreReport({ evaluation, onClose }: ScoreReportProps) {
               Dimension diagnostics
             </h2>
             {ordered.map(res => <DimensionCard key={res.dimension_id} res={res} />)}
-
-            {/* ── Tactical game plan ── */}
-            <div style={{
-              background: c.soft,
-              border: `1px solid ${T.cardBorder}`,
-              borderLeft: `5px solid ${c.border}`,
-              borderRadius: 14,
-              padding: '1.35rem 1.5rem',
-              margin: '0.5rem 0 1.5rem',
-              boxShadow: '0 4px 14px rgba(28, 25, 23, 0.06)',
-            }}>
-              <h3 style={{ color: T.textPrimary, fontWeight: 700, margin: '0 0 0.3rem 0', fontSize: '1.15rem' }}>
-                Tactical game plan
-              </h3>
-              <p style={{ color: T.textMuted, fontSize: '0.88rem', margin: '0 0 0.75rem 0' }}>
-                Your next session — three concrete habits to practice.
-              </p>
-              <ul style={{ margin: 0, padding: '0 0 0 1.25rem' }}>
-                {actions.map((a, i) => (
-                  <li key={i} style={{ margin: '0.5rem 0', color: T.textHeading, lineHeight: 1.55, fontSize: '0.92rem' }}>
-                    {a}
-                  </li>
-                ))}
-              </ul>
-            </div>
 
             <hr style={{ border: 'none', borderTop: `1px solid ${T.cardBorder}`, margin: '0 0 1.25rem 0' }} />
 

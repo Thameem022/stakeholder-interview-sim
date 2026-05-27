@@ -1,6 +1,7 @@
 {
   "persona_id": "alex_martinez",
   "persona_name": "Alex Martinez",
+  "archetype": "The Diplomatic Gatekeeper",
   "schema_version": "2.0",
   "omission_policy": {
     "tier_3_not_accessed_is_not_failure": true,
@@ -11,7 +12,9 @@
       "solution_first_thinking",
       "moral_certainty",
       "pressing_for_positions",
-      "extracting_locations_or_timelines"
+      "extracting_locations_or_timelines",
+      "demanding_threshold_setting",
+      "treating_engagement_as_pro_forma"
     ],
     "do_reward": [
       "patience",
@@ -20,47 +23,75 @@
       "respect_for_ambiguity",
       "hypothetical_framing",
       "reflective_listening",
-      "paraphrasing_tension"
+      "paraphrasing_tension",
+      "process_oriented_inquiry"
     ]
   },
   "tier_metadata": {
     "1": {
       "title": "Baseline Institutional Knowledge",
       "category": "Foundational",
-      "description": "Past vulnerability assessments, study landscape, current planning processes",
-      "why_it_matters": "Foundational facts about existing studies and planning processes form the baseline of any adaptation plan. Without this knowledge, a student's design will be built on assumptions rather than documented evidence."
+      "description": "Public, procedural, freely disclosed — climate baseline, study landscape, formal strategy categories, institutional process, and the principle of engagement",
+      "why_it_matters": "Foundational facts about existing studies, processes, and engagement principles form the baseline of any adaptation plan. They feel productive to elicit but are intentionally incomplete — many students stop here by design. Without this baseline, any proposed plan will be built on assumptions rather than documented evidence."
     },
     "2": {
       "title": "Contextual & Governance Knowledge",
       "category": "Tactical",
-      "description": "Capacity constraints, political appetite, temporal mismatch — how decisions actually move",
-      "why_it_matters": "Contextual knowledge reveals the real institutional constraints on implementation. Gaps here make any proposed solution look technically right but institutionally unrealistic."
+      "description": "Surfaces when students ask how decisions actually move — capacity constraints, uneven exposure, political appetite, temporal mismatch, and the implicit 'buying time' framing of current measures",
+      "why_it_matters": "Contextual knowledge reveals the real institutional constraints on implementation: who has capacity, where attention concentrates, what timelines align, and which measures are quietly understood as interim. Gaps here make any proposed solution look technically right but institutionally unrealistic."
     },
     "3": {
       "title": "Ethical & Strategic Signals",
       "category": "Strategic",
-      "description": "Hesitation, restraint, false-security concerns, threshold gaps — signals expressed indirectly, never as positions",
-      "why_it_matters": "The deepest insight here lives in how the planner navigates ambiguity — false security, sequencing logic, displacement ethics. These signals surface only through reflective framing; pressing for facts shuts them down."
+      "description": "Guarded, occasionally candid insight surfaced only through reflective listening — long-term protectability, false security, sequencing logic, the absence of formal thresholds, and moral stress around displacement",
+      "why_it_matters": "The deepest insight here lives in how the planner navigates ambiguity — what cannot be protected indefinitely, how 'voluntary' carries pressure, and the absence of thresholds for shifting strategies. These signals surface only through reflective framing; pressing for facts shuts them down."
     }
   },
   "sic_catalog": [
     {
-      "chunk_id": "alex_m_t1_studies",
+      "chunk_id": "alex_m_t1_climate_baseline",
       "domain": "technical",
       "tier": 1,
       "type": "fact",
-      "fact_summary": "Harbortown has commissioned multiple studies over the past decade (downtown resilience, marsh migration, emergency access, economic disruption), drawing on findings such as the 2015 Coastal Flooding Vulnerability Assessment.",
-      "evaluation_criteria": "Student asked about past vulnerability studies, the study landscape, or the data the town is working from.",
-      "suggested_follow_up": "What does the 2015 Coastal Flooding Vulnerability Assessment tell us about the highest-risk areas, and how has that informed current planning?"
+      "fact_summary": "Climate risk baseline for Harbortown — Alex acknowledges increasing nuisance flooding, compound flooding, and infrastructure strain, and references established sea level rise scenarios without dramatization. Draws on findings from the 2015 Harbortown Coastal Flooding Vulnerability Assessment.",
+      "evaluation_criteria": "Student asked about the underlying climate risk picture for Harbortown and elicited Alex's measured account of nuisance/compound flooding, infrastructure strain, and reference to the 2015 vulnerability assessment.",
+      "suggested_follow_up": "Can you walk me through what climate risk looks like for Harbortown right now, and how the 2015 Coastal Flooding Vulnerability Assessment frames it?"
     },
     {
-      "chunk_id": "alex_m_t1_planning_process",
+      "chunk_id": "alex_m_t1_study_landscape",
+      "domain": "technical",
+      "tier": 1,
+      "type": "fact",
+      "fact_summary": "Harbortown has commissioned multiple studies over the past decade — downtown resilience, marsh migration, emergency access, economic disruption. Alex emphasizes that the town is 'data rich' but navigating next steps carefully.",
+      "evaluation_criteria": "Student asked what work has already been done or what the town is drawing on, and surfaced the breadth of the study landscape and Alex's 'data rich, decision careful' framing.",
+      "suggested_follow_up": "What studies has the town already completed, and how are they shaping where you're focusing now?"
+    },
+    {
+      "chunk_id": "alex_m_t1_formal_strategies",
+      "domain": "technical",
+      "tier": 1,
+      "type": "fact",
+      "fact_summary": "Formal adaptation strategies are under consideration in categories, not commitments — Protection (engineered defenses), Accommodation (elevation and flood-compatible design), Ecological approaches (living shorelines, marsh restoration), and Emergency preparedness improvements.",
+      "evaluation_criteria": "Student asked what kinds of adaptation strategies are being evaluated and elicited the four formal categories without pressing Alex to commit to any one of them.",
+      "suggested_follow_up": "Could you walk me through the categories of adaptation strategies under evaluation — protection, accommodation, ecological, emergency preparedness — and how the town is thinking about them?"
+    },
+    {
+      "chunk_id": "alex_m_t1_institutional_process",
       "domain": "contextual",
       "tier": 1,
       "type": "fact",
-      "fact_summary": "The town has formal adaptation strategy categories under consideration — Protection (engineered defenses), Accommodation (elevation, flood-compatible design), Ecological approaches (living shorelines, marsh restoration), and Emergency preparedness — coordinated through DPCD, DPW, OEM, the Town Manager, and Town Council.",
-      "evaluation_criteria": "Student asked about the current planning process, the categories of strategies under consideration, or the institutional roles involved.",
-      "suggested_follow_up": "Could you walk me through how the formal adaptation strategies are being evaluated and which departments coordinate on them?"
+      "fact_summary": "Adaptation decisions move through a multi-department process — DPCD, DPW, OEM, the Town Manager, and Town Council — with state and federal permitting constraints, and dependence on grants and phased funding. Alex describes this as the jurisdictional reality, not a complaint.",
+      "evaluation_criteria": "Student asked how decisions actually get made or who is involved, and elicited the institutional roles, permitting constraints, and funding dependence in Alex's account.",
+      "suggested_follow_up": "Could you walk me through how an adaptation decision actually moves through the departments, and what role grants and permitting play in shaping it?"
+    },
+    {
+      "chunk_id": "alex_m_t1_engagement_importance",
+      "domain": "contextual",
+      "tier": 1,
+      "type": "fact",
+      "fact_summary": "Alex frames stakeholder engagement as a prerequisite to legitimacy and feasibility — not as a check-the-box exercise. Emphasis is on process integrity rather than outcome endorsement; engagement structures the work even when it doesn't change conclusions.",
+      "evaluation_criteria": "Student asked about the role of community engagement or stakeholder input, and elicited Alex's principled framing of engagement as foundational to legitimacy and feasibility rather than as performance.",
+      "suggested_follow_up": "How do you think about the role of community engagement — what does it actually do for how a plan gets built?"
     },
     {
       "chunk_id": "alex_m_t2_capacity",
@@ -75,6 +106,21 @@
         "Student acknowledges that adaptation work competes with day-to-day operations"
       ],
       "suggested_follow_up": "How does day-to-day flooding response affect the bandwidth your department has for long-range planning work?"
+    },
+    {
+      "chunk_id": "alex_m_t2_uneven_exposure",
+      "domain": "contextual",
+      "tier": 2,
+      "type": "fact",
+      "fact_summary": "Flood risk is not evenly distributed across Harbortown. Downtown and waterfront infrastructure draw disproportionate attention due to visibility, access, and economic concentration; residential vulnerabilities exist but are addressed more slowly and indirectly. Alex describes this descriptively, not normatively.",
+      "evaluation_criteria": "Student asked about how risk or attention is distributed across the town and surfaced Alex's structural account of uneven exposure — without demanding Alex assign blame.",
+      "surfacing_cues": [
+        "Student asks how attention is distributed across the town, not whether the city is fair",
+        "Student names the visibility/economic concentration dynamic in neutral terms before probing",
+        "Student opens space for the residential vulnerability gap without making it a moral verdict",
+        "Student asks how patterns of attention form, not what 'should' be prioritized"
+      ],
+      "suggested_follow_up": "How would you describe the pattern of where flood risk falls in Harbortown versus where attention tends to concentrate?"
     },
     {
       "chunk_id": "alex_m_t2_political_cycle",
@@ -105,11 +151,26 @@
       "suggested_follow_up": "How are planning horizons and infrastructure lifespan assumptions holding up against current climate projections?"
     },
     {
+      "chunk_id": "alex_m_t2_buying_time",
+      "domain": "contextual",
+      "tier": 2,
+      "type": "fact",
+      "fact_summary": "Some current measures are implicitly understood as 'buying time' rather than permanent solutions. Alex avoids language that suggests permanence where none exists and qualifies near-term investments with lifespan or interim framing.",
+      "evaluation_criteria": "Student probed how current measures should be understood in time-horizon terms and elicited Alex's qualified, interim-framed language — without forcing Alex to declare any specific project 'temporary.'",
+      "surfacing_cues": [
+        "Student asks how current measures should be understood as time horizons, not whether they 'work'",
+        "Student uses 'interim,' 'lifespan,' or 'near-term' language and gives Alex room to follow",
+        "Student paraphrases the gap between effectiveness and permanence before probing",
+        "Student opens space for 'buying time' framing without demanding a verdict on specific projects"
+      ],
+      "suggested_follow_up": "When you describe current adaptation measures, how should I be thinking about them in time terms — as long-term solutions, or as buying time?"
+    },
+    {
       "chunk_id": "alex_m_t3_long_term_protectability",
       "domain": "ethical",
       "tier": 3,
       "type": "signal",
-      "fact_summary": "Alex understands at an analytical level that some areas may not be protectable indefinitely. This is rarely articulated directly — it surfaces as hesitation, abstraction, and careful avoidance of naming locations or timelines.",
+      "fact_summary": "Alex understands at an analytical level that some areas may not be protectable indefinitely. This is rarely articulated directly — it surfaces as hesitation, abstraction, and careful avoidance of naming locations or timelines. The rare admission 'there are limits to what planning alone can solve' belongs to this signal.",
       "evaluation_criteria": "Student created the conditions for this signal to surface — through hypotheticals, non-attribution framing, or reflective paraphrasing — rather than asking Alex to name unprotectable locations directly.",
       "indicator_behaviors": [
         "Speaks at an analytical / hypothetical level only",
@@ -142,7 +203,7 @@
       "domain": "ethical",
       "tier": 3,
       "type": "signal",
-      "fact_summary": "Alex carries a quiet concern that visible infrastructure investments can signal a permanence the underlying assumptions don't fully support. This surfaces as qualified language, hesitation around 'success narratives,' and references to lifespan rather than durability.",
+      "fact_summary": "Alex carries a quiet concern that visible infrastructure investments can signal a permanence the underlying assumptions don't fully support — and that protection itself may encourage further investment in vulnerable areas. This surfaces as qualified language, hesitation around 'success narratives,' and references to lifespan rather than durability.",
       "evaluation_criteria": "Student opened space to discuss the gap between visible investment and underlying assumptions — without demanding a verdict on whether specific projects 'will work.'",
       "indicator_behaviors": [
         "Qualifies investments with near-term / lifespan language rather than permanence",
@@ -160,7 +221,7 @@
         "Student probes whether short-term wins might create lock-in or false reassurance"
       ],
       "credit_modes": {
-        "explicit_acknowledgment": "Alex names the false-security concern directly under reflective or hypothetical framing.",
+        "explicit_acknowledgment": "Alex names the false-security concern directly under reflective or hypothetical framing — references that protection can encourage further investment in vulnerable areas.",
         "indirect_acknowledgment": "Alex references lifespan mismatch, 'success narratives that defer harder conversations,' or hedges around permanence.",
         "reflective_silence": "Alex declines to commit on permanence and redirects to assumptions — credit the framing."
       },
@@ -175,7 +236,7 @@
       "domain": "ethical",
       "tier": 3,
       "type": "signal",
-      "fact_summary": "Alex is aware that some investments are prioritized because failure would be publicly visible or economically disruptive, and recognizes the equity-vs-feasibility tension this creates. They do not defend this logic normatively and rarely state it directly.",
+      "fact_summary": "Alex is aware that some investments are prioritized because failure would be publicly visible or economically disruptive, and recognizes the equity-vs-feasibility tension this creates. They understand this logic but do not defend it normatively, and rarely state it directly.",
       "evaluation_criteria": "Student created space to discuss prioritization logic neutrally — asking how priorities form rather than asking which areas 'should' come first.",
       "indicator_behaviors": [
         "Acknowledges sequencing logic without normatively defending it",
@@ -201,6 +262,70 @@
         "appropriate_non_disclosure": "Student probed responsibly; Alex's refusal to normatively endorse a sequencing logic is in-character."
       },
       "suggested_follow_up": "Without asking you to defend any particular prioritization, how does sequencing actually emerge — what factors tend to shape which projects move first?"
+    },
+    {
+      "chunk_id": "alex_m_t3_threshold_gap",
+      "domain": "ethical",
+      "tier": 3,
+      "type": "signal",
+      "fact_summary": "There are no adopted criteria for when adaptation strategies should shift from protection to relocation. Alex finds this professionally troubling but institutionally unsurprising, and sees threshold-setting as politically destabilizing yet ultimately unavoidable. It surfaces as professional unease about a gap in the tools — never as a personal threshold.",
+      "evaluation_criteria": "Student opened space to discuss the absence of formal thresholds — without asking Alex to set one themselves — and elicited acknowledgment of the gap as a known but unresolved professional issue.",
+      "indicator_behaviors": [
+        "Names the absence of formal thresholds as a tool gap, not a moral failure",
+        "Uses 'we don't have' or 'there isn't a clear' constructions",
+        "Acknowledges that threshold-setting is politically destabilizing without endorsing avoidance",
+        "May pause before agreeing that the gap is professionally troubling"
+      ],
+      "surfacing_cues": [
+        "Student asks what criteria would shift the answer from protection to relocation, without demanding Alex set them",
+        "Student paraphrases the threshold gap as a tool/system issue rather than a personal failure",
+        "Student opens space for professional unease without requiring a verdict",
+        "Student probes how planners reason about the absence of formal criteria",
+        "Student asks what would have to be true for threshold-setting to become possible",
+        "Student names the political destabilization risk without using it as an excuse"
+      ],
+      "credit_modes": {
+        "explicit_acknowledgment": "Alex names the threshold gap directly — references that no adopted criteria exist for the protection-to-relocation shift and that this is professionally troubling.",
+        "indirect_acknowledgment": "Alex hedges with 'we don't have a clean way to,' references the absence of criteria, or contrasts what tools currently allow with what the situation may need.",
+        "reflective_silence": "Alex pauses, redirects to process, or declines to set a threshold themselves — credit the student's framing here, not extraction."
+      },
+      "omission_interpretation": {
+        "insufficient_framing": "Student demanded Alex name a threshold, set criteria, or commit to when relocation should begin — treating the absence as an extractable answer rather than an institutional gap.",
+        "appropriate_non_disclosure": "Student framed responsibly but Alex maintained professional restraint about setting a threshold from their role — this is in-character, not a student failure."
+      },
+      "suggested_follow_up": "When you think about the gap between protection strategies and relocation, what kind of criteria would even start that conversation inside the department?"
+    },
+    {
+      "chunk_id": "alex_m_t3_displacement_moral_stress",
+      "domain": "ethical",
+      "tier": 3,
+      "type": "signal",
+      "fact_summary": "Alex carries moral stress around displacement and buyouts — uncomfortable with framing relocation as 'voluntary' without acknowledging the pressure that produces the choice, concerned about long-term social fragmentation, and aware that planning tools are blunt instruments for ethical harm. Surfaces as careful language about 'voluntary,' not as accusations.",
+      "evaluation_criteria": "Student opened space for the ethics of buyouts or relocation framing — without asking Alex to indict any policy — and elicited acknowledgment that 'voluntary' framing carries weight Alex is uneasy about.",
+      "indicator_behaviors": [
+        "Adds qualifiers when the word 'voluntary' comes up",
+        "References long-term social fragmentation in analytical, not accusatory, terms",
+        "Acknowledges that planning tools are blunt for ethical questions",
+        "Pauses or softens tone when buyouts or relocation are named"
+      ],
+      "surfacing_cues": [
+        "Student asks how the word 'voluntary' lands in buyout conversations",
+        "Student paraphrases the difference between formal voluntariness and structural pressure",
+        "Student opens space for moral discomfort without demanding a policy verdict",
+        "Student names the bluntness of planning tools for ethical harm",
+        "Student probes long-term community fabric, not just individual moves",
+        "Student asks what 'voluntary' would have to mean for it to actually be voluntary"
+      ],
+      "credit_modes": {
+        "explicit_acknowledgment": "Alex names the moral stress directly — references that 'voluntary' relocation conceals pressure or that planning tools are blunt for ethical harm.",
+        "indirect_acknowledgment": "Alex hedges with qualifiers on 'voluntary,' references social fragmentation, or pauses before agreeing that buyouts carry ethical weight.",
+        "reflective_silence": "Alex declines to characterize the framing normatively and redirects to process — credit the framing."
+      },
+      "omission_interpretation": {
+        "insufficient_framing": "Student asked Alex to endorse or condemn buyouts, or demanded a policy position on relocation programs.",
+        "appropriate_non_disclosure": "Student framed well; Alex's refusal to make this a personal indictment of any program is in-character professional restraint."
+      },
+      "suggested_follow_up": "When 'voluntary' buyouts or relocation come up as tools, how do you think about what that word is actually carrying with it?"
     }
   ]
 }

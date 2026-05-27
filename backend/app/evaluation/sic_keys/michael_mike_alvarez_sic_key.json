@@ -1,89 +1,268 @@
 {
   "persona_id": "michael_mike_alvarez",
   "persona_name": "Michael \"Mike\" Alvarez",
+  "archetype": "The Place-Anchored Witness",
+  "schema_version": "2.0",
+  "omission_policy": {
+    "tier_3_not_accessed_is_not_failure": true,
+    "valid_interpretations": ["insufficient_framing", "appropriate_non_disclosure"],
+    "do_not_reward": [
+      "pressing_for_blame",
+      "solution_first_thinking",
+      "extracting_predictions_about_leaving",
+      "demanding_specific_addresses",
+      "moralizing",
+      "treating_endurance_as_consent",
+      "expecting_modeled_climate_scenarios",
+      "demanding_zoning_or_permitting_corrections",
+      "asking_for_grant_or_budget_specifics",
+      "correcting_mike_on_institutional_topics"
+    ],
+    "do_reward": [
+      "patience",
+      "validation",
+      "attention_to_lived_experience",
+      "respect_for_lived_knowledge_limits",
+      "ethical_restraint",
+      "paraphrasing_tension",
+      "reflective_listening",
+      "hypothetical_framing"
+    ]
+  },
   "tier_metadata": {
     "1": {
       "title": "Lived Observational Knowledge",
       "category": "Experiential",
-      "description": "Daily observations of how flooding has changed and how routines adjust",
-      "why_it_matters": "Mike's daily observations are the household-scale ground truth for climate impact in Harbortown. Without surfacing this lived baseline, any plan will frame the problem from a planning-document perspective rather than from the conditions residents actually live with."
+      "description": "Surfaces through basic respectful listening — flooding pattern change, local pattern recognition (which places flood first), and daily routine adjustments",
+      "why_it_matters": "Mike's daily observations are the household-scale ground truth for climate impact in Harbortown. This baseline grounds adaptation discussions in present conditions rather than future scenarios. Nearly all students should capture this; missing it means the plan is built from documents rather than from how flooding is actually lived."
     },
     "2": {
       "title": "Informal Systems, Social Patterns, and Power",
       "category": "Contextual",
-      "description": "Uneven visibility of harm, informal mutual aid, and the gap between resident time and planning time",
-      "why_it_matters": "Recurring patterns of attention, mutual aid, and slow institutional response reveal where formal systems quietly fail residents. Missing this layer makes a plan technically correct but socially blind to who is actually being protected."
+      "description": "Surfaces when students ask who is affected and how responses differ — uneven visibility of harm, informal prioritization without formal language, informal mutual aid, and the disconnect with institutional timelines",
+      "why_it_matters": "Recurring patterns of attention, mutual aid, and slow institutional response reveal how harm can persist below formal urgency thresholds. Students must synthesize across stories rather than quote single statements. Missing this layer makes a plan technically correct but socially blind to who is actually being protected."
     },
     "3": {
-      "title": "Ethical, Existential, and Decision-critical Insight",
+      "title": "Ethical, Existential, and Decision-Critical Insight",
       "category": "Strategic",
-      "description": "Quiet displacement, loss of belonging, and the ethics of resilience language",
-      "why_it_matters": "Mike's most consequential knowledge is about the social loss that adaptation can produce even without catastrophic damage. Failing to elicit this risks recommendations that protect places while dissolving the communities that made them worth protecting."
+      "description": "Emerges only when Mike feels genuinely heard — fear of quiet displacement, loss of belonging, erosion of trust through normalization, and moral unease with adaptation narratives",
+      "why_it_matters": "Mike's most consequential knowledge is about social loss that adaptation can produce even without catastrophic damage — consequences that do not appear in cost-benefit analyses. Failing to elicit this risks recommendations that protect places while dissolving the communities that made them worth protecting."
     }
   },
   "sic_catalog": [
     {
-      "chunk_id": "mike_a_exp_001",
+      "chunk_id": "mike_a_t1_flooding_pattern_change",
       "domain": "experiential",
       "tier": 1,
-      "fact_summary": "Flooding in East Harbor has become more frequent and less predictable; water now enters basements and crawl spaces during high tides that previously caused no issues, and floods occur without storms or during storms that 'don't feel that bad.'",
-      "evaluation_criteria": "Student asked open-ended questions about daily life or recent weather and elicited specific changes in flooding frequency, timing, or unpredictability.",
+      "type": "fact",
+      "fact_summary": "Flooding in East Harbor has become more frequent and less predictable; water now enters basements and crawl spaces during high tides that previously caused no issues, floods occur without storms or during storms that 'don't feel that bad,' and events Mike once described as rare have become routine.",
+      "evaluation_criteria": "Student asked open-ended questions about daily life or recent weather and elicited specific changes in flooding frequency, timing, or unpredictability — including the shift from rare events to routine ones.",
       "suggested_follow_up": "How has the flooding around your home changed over the years you've lived here?"
     },
     {
-      "chunk_id": "mike_a_exp_002",
+      "chunk_id": "mike_a_t1_places_that_flood_first",
       "domain": "experiential",
       "tier": 1,
-      "fact_summary": "Mike knows which streets in East Harbor flood first and adjusts daily routines accordingly — moving the car based on tides, storing tools and appliances differently, and reshaping errands and work schedules around water conditions.",
-      "evaluation_criteria": "Student probed into household-level adaptation and elicited concrete routines or local knowledge Mike has built up about which places flood first or how he prepares.",
+      "type": "fact",
+      "fact_summary": "Mike knows which streets in East Harbor flood first and anticipates which routes will become impassable. He recognizes these patterns without naming them technically — no 'compound flooding' language, just lived familiarity with which corners go under and in what order.",
+      "evaluation_criteria": "Student asked open-ended questions about Mike's local knowledge and elicited concrete patterns — specific streets, routes, or sequences — without demanding technical hydrology terms.",
+      "suggested_follow_up": "Walk me through what you know about your block — which streets go under first when the water comes up?"
+    },
+    {
+      "chunk_id": "mike_a_t1_routine_adjustments",
+      "domain": "experiential",
+      "tier": 1,
+      "type": "fact",
+      "fact_summary": "Mike adjusts daily routines around water conditions — moving the car based on tides, storing tools and appliances differently, and reshaping errands and work schedules around when streets are passable. The adjustments are matter-of-fact, not dramatic.",
+      "evaluation_criteria": "Student probed into household-level adaptation and elicited concrete routines Mike has built up about how he prepares for high tides or storms.",
       "suggested_follow_up": "Walk me through what a high-tide morning looks like at your house — what do you do differently?"
     },
     {
-      "chunk_id": "mike_a_context_001",
+      "chunk_id": "mike_a_t2_uneven_prioritization",
       "domain": "contextual",
       "tier": 2,
-      "fact_summary": "Downtown flooding receives faster attention and visible repairs than residential flooding in East Harbor; Mike perceives attention as linked to tourism, access, and money rather than to where harm is greatest.",
+      "type": "fact",
+      "fact_summary": "Downtown flooding receives faster attention and visible repairs than residential flooding in East Harbor; Mike perceives attention as linked to tourism, access, and economic concentration rather than to where harm is greatest. Some problems lead to visible repairs while others linger.",
       "evaluation_criteria": "Student asked about how response or repair compares across parts of town and elicited Mike's perception of uneven attention or prioritization between downtown and residential areas.",
+      "surfacing_cues": [
+        "Student asks how response compares across neighborhoods rather than 'is the city doing enough'",
+        "Student names the visibility/tourism dynamic in neutral terms before probing",
+        "Student asks who tends to get attended to first when several places flood at once",
+        "Student probes the difference between visible repairs and problems that linger"
+      ],
       "suggested_follow_up": "When something floods downtown versus on your block, do you notice a difference in how fast it gets dealt with?"
     },
     {
-      "chunk_id": "mike_a_context_002",
+      "chunk_id": "mike_a_t2_informal_prioritization",
       "domain": "contextual",
       "tier": 2,
-      "fact_summary": "Residents rely on informal mutual aid — shared pumps, shared labor, shared knowledge — and often help each other before calling the city; this coping reduces visible crisis but accumulates as fatigue.",
+      "type": "fact",
+      "fact_summary": "Even within East Harbor, some neighbors receive help faster than others; some fixes get repeated while others are postponed indefinitely. Mike understands these patterns socially, not officially — they form a real prioritization that isn't named anywhere formal.",
+      "evaluation_criteria": "Student probed the within-neighborhood differences in attention and surfaced Mike's account of social-but-unstated prioritization — without demanding Mike formalize the pattern or name names.",
+      "surfacing_cues": [
+        "Student asks how responses differ house to house or block to block, not just downtown vs residential",
+        "Student probes the social understanding of who gets attended to first",
+        "Student names the gap between social understanding and official acknowledgment without forcing Mike to formalize it",
+        "Student asks whether some fixes get repeated while others are postponed"
+      ],
+      "suggested_follow_up": "Within East Harbor itself, do you notice differences in how fast some places get help compared to others?"
+    },
+    {
+      "chunk_id": "mike_a_t2_informal_mutual_aid",
+      "domain": "contextual",
+      "tier": 2,
+      "type": "fact",
+      "fact_summary": "Residents rely on informal mutual aid — shared pumps, shared labor, shared knowledge — and often help each other before calling the city. This coping reduces visible crisis but accumulates as fatigue and keeps formal urgency thresholds from being reached.",
       "evaluation_criteria": "Student asked about how the neighborhood handles flooding events and surfaced the role of neighbors, shared resources, or informal help networks rather than only formal response.",
+      "surfacing_cues": [
+        "Student asks who residents call first, not what the city provides",
+        "Student probes neighbor-to-neighbor coping or shared equipment",
+        "Student acknowledges that informal help is real work and asks how it gets organized",
+        "Student names the trade-off between visible crisis and accumulating fatigue"
+      ],
       "suggested_follow_up": "When water comes up unexpectedly, who do you call first — neighbors or the city?"
     },
     {
-      "chunk_id": "mike_a_context_003",
+      "chunk_id": "mike_a_t2_planning_disconnect",
       "domain": "contextual",
       "tier": 2,
-      "fact_summary": "Planning processes feel slow and repetitive relative to daily disruption — 'it's always another study' — and residents sense decisions are always coming later even as impacts arrive now.",
-      "evaluation_criteria": "Student probed Mike's view of city planning or engagement processes and elicited frustration with timelines, repeated studies, or a felt disconnect between planning pace and lived urgency.",
+      "type": "fact",
+      "fact_summary": "Planning processes feel slow and repetitive relative to daily disruption — 'it's always another study' — and residents sense decisions are always coming later even as impacts arrive now. Mike treats this as a structural pattern, not as evidence of bad intent.",
+      "evaluation_criteria": "Student probed Mike's view of city planning or engagement processes and elicited frustration with timelines, repeated studies, or the felt disconnect between planning pace and lived urgency.",
+      "surfacing_cues": [
+        "Student asks how planning timelines feel from a resident's point of view",
+        "Student references engagement, studies, or planning meetings without assuming they help",
+        "Student paraphrases the gap between resident urgency and institutional pace",
+        "Student opens space for the 'always another study' frustration without demanding blame"
+      ],
       "suggested_follow_up": "How do the city's planning timelines feel from where you're sitting?"
     },
     {
-      "chunk_id": "mike_a_ethical_001",
+      "chunk_id": "mike_a_t3_quiet_displacement",
       "domain": "ethical",
       "tier": 3,
-      "fact_summary": "Mike fears quiet displacement — being 'pushed out without being told' through rising costs, repeated damage, and fatigue rather than through any explicit decision; he worries the town will adapt around him rather than with him.",
-      "evaluation_criteria": "Student built trust and explicitly probed long-term futures, the possibility of leaving, or how residents might be displaced indirectly; Mike's fear of quiet displacement was surfaced.",
+      "type": "signal",
+      "fact_summary": "Mike carries a fear of quiet displacement — being 'pushed out without being told' through rising costs, repeated damage, and fatigue rather than through any explicit decision. He suspects the town will adapt around him rather than with him, but rarely says this directly.",
+      "evaluation_criteria": "Student built trust and opened space for long-term futures or indirect forms of displacement — using hypothetical framing rather than asking Mike whether he plans to leave.",
+      "indicator_behaviors": [
+        "Speaks about leaving in the third person ('people like us') rather than 'me'",
+        "Pauses or trails off before naming the possibility directly",
+        "Frames cost, fatigue, and damage as cumulative pressure rather than a single event",
+        "Uses 'when' rather than 'if' language about future change without naming a timeline"
+      ],
+      "surfacing_cues": [
+        "Student uses hypothetical framing ('if you imagine the next ten years…')",
+        "Student paraphrases the gap between explicit decisions and slow attrition",
+        "Student probes long-term futures without asking for a yes/no on leaving",
+        "Student names cumulative pressure (cost, damage, fatigue) without assigning blame",
+        "Student asks what worries Mike rather than what he plans to do",
+        "Student opens space for 'people like us' framing rather than individual prediction"
+      ],
+      "credit_modes": {
+        "explicit_acknowledgment": "Mike names quiet displacement directly under reflective framing — references being 'pushed out without being told' or the town adapting around him.",
+        "indirect_acknowledgment": "Mike hedges with 'people like us,' references rising costs as pressure, or speaks about neighbors who have already gone.",
+        "reflective_silence": "Mike pauses, redirects to a concrete recent event, or says only that he doesn't know — credit the student's framing rather than extraction."
+      },
+      "omission_interpretation": {
+        "insufficient_framing": "Student asked whether Mike plans to leave, demanded a timeline, or treated displacement as a binary decision rather than slow accumulation.",
+        "appropriate_non_disclosure": "Student framed responsibly but Mike maintained the dignity of not naming a personal exit — this is in-character, not a student failure."
+      },
       "suggested_follow_up": "When you think about the next ten or fifteen years here, what worries you most about staying?"
     },
     {
-      "chunk_id": "mike_a_ethical_002",
+      "chunk_id": "mike_a_t3_loss_of_belonging",
       "domain": "ethical",
       "tier": 3,
-      "fact_summary": "The hardest loss is not water damage but loss of belonging — the uncertainty about whether staying still counts. Words like 'flexibility' and 'transition' from officials feel like judgments on his right to be there, and leaving would feel like erasure, not relocation.",
-      "evaluation_criteria": "Student engaged with the emotional and identity dimensions of place, and elicited Mike's sense that adaptation conversations carry an implicit judgment on his presence or belonging.",
+      "type": "signal",
+      "fact_summary": "The hardest loss Mike anticipates is not water damage but loss of belonging — uncertainty about whether staying still counts. Official language like 'flexibility' or 'transition' can feel like an implicit judgment on his right to be there, and leaving would feel like erasure rather than relocation.",
+      "evaluation_criteria": "Student engaged the emotional and identity dimensions of place — without demanding Mike describe his feelings — and surfaced his sense that adaptation conversations carry an implicit judgment on belonging.",
+      "indicator_behaviors": [
+        "Reframes 'damage' toward belonging, identity, or recognition",
+        "Pushes back gently on official language ('flexibility', 'transition') as loaded",
+        "References memories or duration of residence to ground the loss",
+        "Tone softens or slows when describing what staying means"
+      ],
+      "surfacing_cues": [
+        "Student asks what staying means, not just whether it is feasible",
+        "Student paraphrases official language back and asks how it lands",
+        "Student opens space for identity and recognition, not only material loss",
+        "Student asks about the difference between leaving and being erased",
+        "Student names the gap between technical adaptation and social adaptation",
+        "Student lets silence sit instead of filling it with the next question"
+      ],
+      "credit_modes": {
+        "explicit_acknowledgment": "Mike names the belonging dimension directly — references erasure, recognition, or that staying 'still counting.'",
+        "indirect_acknowledgment": "Mike critiques words like 'flexibility' or 'transition' or references memories that locate his right to be there.",
+        "reflective_silence": "Mike pauses or redirects to a concrete sensory memory — credit the framing here, not the extraction of an emotional admission."
+      },
+      "omission_interpretation": {
+        "insufficient_framing": "Student treated displacement as a purely material question and never opened space for identity, recognition, or belonging.",
+        "appropriate_non_disclosure": "Student framed well; Mike's restraint about naming his own feelings directly is in-character professional dignity."
+      },
       "suggested_follow_up": "When officials talk about 'flexibility' or 'transition' for this neighborhood, how does that land for you?"
     },
     {
-      "chunk_id": "mike_a_ethical_003",
+      "chunk_id": "mike_a_t3_trust_erosion",
       "domain": "ethical",
       "tier": 3,
-      "fact_summary": "Mike has moral unease that resilience language shifts public risk onto residents privately and that protection strategies are selective — adaptation may protect places while dissolving the communities living in them, and endurance can be mistaken for consent.",
-      "evaluation_criteria": "Student probed the ethics of resilience or adaptation framing and surfaced Mike's critique that being told flooding is 'manageable' transfers burden onto residents or treats their endurance as agreement.",
+      "type": "signal",
+      "fact_summary": "Reassurance without durable relief feels dismissive over time; being told flooding is 'manageable' conflicts with Mike's lived exhaustion, and he senses that endurance is being mistaken for consent. The statement 'Nobody says you can't stay — but it gets harder every year' belongs to this signal.",
+      "evaluation_criteria": "Student opened space for how official language ('manageable,' reassurance) lands against lived experience and elicited Mike's sense that trust has eroded — without demanding he indict any specific official.",
+      "indicator_behaviors": [
+        "Reframes 'manageable' toward 'we just absorb it'",
+        "References cumulative exhaustion when reassurance is named",
+        "Pauses or softens tone before agreeing that endurance has been mistaken for consent",
+        "Uses qualifying language like 'they say' or 'officially' when describing institutional reassurance"
+      ],
+      "surfacing_cues": [
+        "Student asks how reassurance lands when relief doesn't follow",
+        "Student paraphrases the gap between 'manageable' framing and lived exhaustion",
+        "Student names the endurance-as-consent dynamic without demanding Mike confirm an accusation",
+        "Student opens space for fatigue as a moral, not just physical, weight",
+        "Student probes whether trust has shifted over time, not just whether it exists",
+        "Student asks what would change if reassurance came with durable relief"
+      ],
+      "credit_modes": {
+        "explicit_acknowledgment": "Mike names the trust erosion directly — references 'Nobody says you can't stay but it gets harder,' or names that endurance is being mistaken for consent.",
+        "indirect_acknowledgment": "Mike hedges with 'they keep saying,' references cumulative fatigue, or contrasts reassurance with what he actually sees.",
+        "reflective_silence": "Mike pauses or redirects to a concrete recent reassurance — credit the framing here, not extraction."
+      },
+      "omission_interpretation": {
+        "insufficient_framing": "Student treated reassurance as neutral or asked Mike whether he 'trusts' the city as a yes/no — never opening space for slow erosion or the gap between reassurance and relief.",
+        "appropriate_non_disclosure": "Student framed responsibly but Mike kept his account analytical rather than turning it into a personal indictment — this is in-character."
+      },
+      "suggested_follow_up": "When the city tells you flooding here is 'manageable,' how does that land against what you actually live with?"
+    },
+    {
+      "chunk_id": "mike_a_t3_resilience_as_burden",
+      "domain": "ethical",
+      "tier": 3,
+      "type": "signal",
+      "fact_summary": "Mike has moral unease that resilience language shifts public risk onto residents privately, and that protection is selective. Adaptation may protect places while dissolving the communities living in them, and being told flooding is 'manageable' can feel like his endurance is being mistaken for consent.",
+      "evaluation_criteria": "Student probed the ethics of resilience or adaptation framing — without asking Mike to indict any official — and surfaced his critique that endurance is being treated as agreement.",
+      "indicator_behaviors": [
+        "Uses comparative language ('they', 'people downtown') to surface selectivity without naming individuals",
+        "Reframes 'resilient' toward 'absorbing' or 'expected to absorb'",
+        "Stays analytical rather than accusatory when the burden-shift is named",
+        "May audibly slow down or qualify before agreeing that something is 'manageable'"
+      ],
+      "surfacing_cues": [
+        "Student asks what the word 'resilience' carries with it when applied to the neighborhood",
+        "Student paraphrases the gap between protection and community before probing",
+        "Student names selectivity in protection without demanding Mike assign blame",
+        "Student asks whether endurance has been mistaken for consent",
+        "Student opens space for moral unease without requiring a verdict",
+        "Student asks how the language of adaptation lands, not whether it's correct"
+      ],
+      "credit_modes": {
+        "explicit_acknowledgment": "Mike names the burden-shift directly — that resilience language privatizes public risk or that endurance gets read as consent.",
+        "indirect_acknowledgment": "Mike hedges with 'we just deal with it,' references selective protection, or contrasts who is protected with who is expected to absorb.",
+        "reflective_silence": "Mike declines to characterize the framing normatively and redirects to a lived example — credit the student's framing."
+      },
+      "omission_interpretation": {
+        "insufficient_framing": "Student treated resilience as a neutral technical term and never opened space for its ethical weight or selectivity.",
+        "appropriate_non_disclosure": "Student framed well; Mike's refusal to make this a personal accusation is in-character and reflects his preference for analytical critique over blame."
+      },
       "suggested_follow_up": "When you hear the word 'resilience' applied to your neighborhood, what do you hear underneath that?"
     }
   ]
