@@ -156,47 +156,10 @@ function scoreBarColor(score: number) {
   return T.amberAccent;
 }
 
-function skillTitleFromScore(score: number): string {
-  if (score >= 10)  return 'Master Stakeholder Partner';
-  if (score >= 9)   return 'Advanced Systems Interviewer';
-  if (score >= 8)   return 'Competent Operational Interviewer';
-  if (score >= 7)   return 'Emerging Technical Interviewer';
-  if (score >= 6)   return 'Novice Fact-Finder';
-  if (score >= 5)   return 'Developing Interviewer';
-  if (score >= 4)   return 'Developing Questioner';
-  if (score >= 3)   return 'Surface-Level Asker';
-  return 'Pre-Novice Learner';
-}
-
 function meanScore(results: IQREvaluation[]): number {
   if (!results.length) return 0;
   return results.reduce((s, r) => s + r.score, 0) / results.length;
 }
-
-// ---------------------------------------------------------------------------
-// Skill level descriptions (one sentence per band — from dashboard.py)
-// ---------------------------------------------------------------------------
-
-const SKILL_LEVEL_DESCRIPTIONS: Record<string, string> = {
-  'Pre-Novice Learner':
-    'Minimal structured questioning; relies entirely on yes/no or leading questions with no attempt to probe or acknowledge stakeholder cues.',
-  'Surface-Level Asker':
-    'Asks basic factual questions but shows no follow-through; misses all emotional, ethical, and technical cues with responses disconnected from stakeholder answers.',
-  'Developing Questioner':
-    'Shows some intent to gather information but lacks consistent probing; follow-up questions are rare and off-target with rapport and active listening largely absent.',
-  'Developing Interviewer':
-    'Basic question structure is present but major weaknesses remain in probing depth, active listening, and ethical neutrality; stakeholder cues are frequently missed.',
-  'Novice Fact-Finder':
-    'A novice fact-finder can collect surface-level information but relies heavily on closed questions, rarely probes beyond the obvious, and tends to capture what happened without uncovering why.',
-  'Emerging Technical Interviewer':
-    'Demonstrates growing command of open-ended questions and targeted probes, though depth and consistency still vary across topics.',
-  'Competent Operational Interviewer':
-    'Reliably structures sessions, uses probing effectively, and surfaces most relevant details; minor gaps remain in rapport and adaptive follow-up.',
-  'Advanced Systems Interviewer':
-    'Combines strong technique with contextual awareness, consistently drawing out root causes and stakeholder perspectives with minimal wasted turns.',
-  'Master Stakeholder Partner':
-    'Fluently adapts to any interview context, builds genuine rapport, and extracts nuanced insight that less experienced interviewers routinely miss.',
-};
 
 // ---------------------------------------------------------------------------
 // Glossary
@@ -1072,18 +1035,8 @@ export default function ScoreReport({ evaluation, onClose }: ScoreReportProps) {
   const results = evaluation.evaluation_results ?? [];
   const mean    = meanScore(results);
   const c       = coachColors(mean);
-  const persona   = (evaluation.metadata?.persona as string) || '';
-  const sessionId = (evaluation.metadata?.session_id as string) || '';
   const turns     = (evaluation.metadata as any)?.turns as any[] | undefined;
   const hasSicData = Array.isArray(evaluation.insight_coverage) && evaluation.insight_coverage.length > 0;
-
-  // Mode skill title across dimensions
-  const titles = results.map(r => r.skill_level_title?.trim()).filter(Boolean);
-  const modeTitle = titles.length
-    ? [...titles].sort((a, b) => titles.filter(x => x === b).length - titles.filter(x => x === a).length)[0]
-    : skillTitleFromScore(mean);
-
-  const skillDesc = SKILL_LEVEL_DESCRIPTIONS[modeTitle] || '';
 
   // Order dimensions
   const byName: Record<string, IQREvaluation> = {};
@@ -1173,22 +1126,9 @@ export default function ScoreReport({ evaluation, onClose }: ScoreReportProps) {
             marginBottom: '1.35rem',
             boxShadow: '0 8px 24px rgba(28, 25, 23, 0.08)',
           }}>
-            <div style={{
-              fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.08em',
-              color: T.textFaint, textTransform: 'uppercase', marginBottom: '0.4rem',
-            }}>
-              Skill level
+            <div style={{ fontSize: '2rem', fontWeight: 800, color: c.deep, lineHeight: 1.2, letterSpacing: '-0.02em' }}>
+              {mean.toFixed(1)}/10
             </div>
-            <div style={{ fontSize: '2rem', fontWeight: 800, color: T.textPrimary, lineHeight: 1.2, letterSpacing: '-0.02em' }}>
-              <span style={{ color: c.deep }}>{mean.toFixed(1)}/10</span>
-              <span style={{ color: T.textGhost, fontWeight: 600 }}> — </span>
-              <span>{modeTitle}</span>
-            </div>
-            {skillDesc && (
-              <p style={{ color: T.textMuted, fontSize: '0.93rem', lineHeight: 1.6, margin: '0.6rem 0 0 0' }}>
-                {skillDesc}
-              </p>
-            )}
           </div>
         )}
 
@@ -1203,39 +1143,17 @@ export default function ScoreReport({ evaluation, onClose }: ScoreReportProps) {
         {/* ══════════════ IQR TAB ══════════════ */}
         {activeTab === 'iqr' && (
           <>
-            {/* ── Session info + Overall summary ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
-              <div style={{
-                background: T.cardBg, border: `1px solid ${T.cardBorder}`,
-                borderRadius: 12, padding: '1.25rem',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-              }}>
-                <h3 style={{ color: T.textHeading, fontWeight: 600, margin: '0 0 0.75rem 0', fontSize: '1rem' }}>Session</h3>
-                {persona && (
-                  <p style={{ color: T.textMuted, margin: '0 0 0.4rem 0', fontSize: '0.9rem' }}>
-                    <strong>Persona:</strong> {persona}
-                  </p>
-                )}
-                {sessionId && (
-                  <p style={{ color: T.textMuted, margin: 0, fontSize: '0.9rem' }}>
-                    <strong>Session:</strong>{' '}
-                    <code style={{ fontSize: '0.78rem', background: '#f5f5f4', padding: '1px 6px', borderRadius: 4 }}>
-                      {sessionId.slice(0, 8)}…
-                    </code>
-                  </p>
-                )}
-              </div>
-
-              <div style={{
-                background: T.cardBg, border: `1px solid ${T.cardBorder}`,
-                borderRadius: 12, padding: '1.25rem',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-              }}>
-                <h3 style={{ color: T.textHeading, fontWeight: 600, margin: '0 0 0.75rem 0', fontSize: '1rem' }}>Overall summary</h3>
-                <p style={{ color: T.textMuted, lineHeight: 1.65, fontSize: '0.9rem', margin: 0 }}>
-                  {evaluation.overall_summary}
-                </p>
-              </div>
+            {/* ── Overall summary ── */}
+            <div style={{
+              background: T.cardBg, border: `1px solid ${T.cardBorder}`,
+              borderRadius: 12, padding: '1.25rem',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              marginBottom: '1.5rem',
+            }}>
+              <h3 style={{ color: T.textHeading, fontWeight: 600, margin: '0 0 0.75rem 0', fontSize: '1rem' }}>Overall summary</h3>
+              <p style={{ color: T.textMuted, lineHeight: 1.65, fontSize: '0.9rem', margin: 0 }}>
+                {evaluation.overall_summary}
+              </p>
             </div>
 
             {/* ── Dimension diagnostics ── */}

@@ -7,7 +7,11 @@ Deploy this repo to the WPI Ubuntu VM that also hosts `interviewsimulator.wpi.ed
 | Old | `interviewsimulator.wpi.edu` | 8000 | `/opt/interviewsimulator/` | `interviewsimulator.service` |
 | **New** | **`stakeholder-engagement-simulator.wpi.edu`** | **8001** | **`/opt/stakeholder-engagement-simulator/`** | **`stakeholder-engagement-simulator.service`** |
 
-> Replace the SSH user `mohammedthameem` and Unix user `thameem` below with your actual WPI usernames if different.
+> Both the SSH login and the Unix service user are `mohammedthameem` on this VM
+> (no separate `thameem` account exists). Replace with your own WPI username
+> if you fork this for a different host. The systemd unit
+> (`deploy/systemd/stakeholder-engagement-simulator.service`) is already set
+> to `User=mohammedthameem`.
 
 ---
 
@@ -81,7 +85,7 @@ PGPASSWORD=CHANGE_ME_STRONG_PASSWORD psql -h 127.0.0.1 -U sis -d sis \
 
 ```bash
 sudo mkdir -p /opt/stakeholder-engagement-simulator
-sudo chown -R thameem:www-data /opt/stakeholder-engagement-simulator
+sudo chown -R mohammedthameem:www-data /opt/stakeholder-engagement-simulator
 mkdir -p ~/stakeholder-engagement-simulator-upload/backend
 mkdir -p ~/stakeholder-engagement-simulator-upload/frontend
 ```
@@ -121,7 +125,7 @@ Run on the **server**:
 
 ```bash
 sudo cp -R ~/stakeholder-engagement-simulator-upload/. /opt/stakeholder-engagement-simulator/
-sudo chown -R thameem:www-data /opt/stakeholder-engagement-simulator
+sudo chown -R mohammedthameem:www-data /opt/stakeholder-engagement-simulator
 ```
 
 ### 7. Create the server env file
@@ -129,7 +133,7 @@ sudo chown -R thameem:www-data /opt/stakeholder-engagement-simulator
 ```bash
 sudo nano /opt/stakeholder-engagement-simulator/.env
 sudo chmod 600 /opt/stakeholder-engagement-simulator/.env
-sudo chown thameem:thameem /opt/stakeholder-engagement-simulator/.env
+sudo chown mohammedthameem:mohammedthameem /opt/stakeholder-engagement-simulator/.env
 ```
 
 Required variables:
@@ -146,7 +150,7 @@ PORT=8001
 
 ```bash
 cd /opt/stakeholder-engagement-simulator/backend
-sudo -u thameem uv sync
+sudo -u mohammedthameem uv sync
 ```
 
 This creates `backend/.venv` and installs everything from `pyproject.toml` / `uv.lock`.
@@ -155,7 +159,7 @@ This creates `backend/.venv` and installs everything from `pyproject.toml` / `uv
 
 ```bash
 cd /opt/stakeholder-engagement-simulator/backend
-sudo -u thameem uv run alembic upgrade head
+sudo -u mohammedthameem uv run alembic upgrade head
 ```
 
 You should see both migrations apply: `0001_initial` then `0002_session_evaluations`.
@@ -164,7 +168,7 @@ You should see both migrations apply: `0001_initial` then `0002_session_evaluati
 
 ```bash
 cd /opt/stakeholder-engagement-simulator/backend
-sudo -u thameem -E uv run python scripts/embed_and_load.py
+sudo -u mohammedthameem -E uv run python scripts/embed_and_load.py
 ```
 
 `-E` preserves the shell env so the script picks up `OPENAI_API_KEY` from the .env (alternatively `source /opt/stakeholder-engagement-simulator/.env && export OPENAI_API_KEY` first). The script TRUNCATES the vector tables before inserting, so it's safe to re-run.
@@ -182,12 +186,12 @@ PGPASSWORD=CHANGE_ME_STRONG_PASSWORD psql -h 127.0.0.1 -U sis -d sis -c \
 
 ```bash
 cd /opt/stakeholder-engagement-simulator/frontend
-sudo -u thameem npm ci
-sudo -u thameem npm run build
+sudo -u mohammedthameem npm ci
+sudo -u mohammedthameem npm run build
 
 # FastAPI serves the SPA from backend/static (see app/main.py).
-sudo -u thameem rm -rf /opt/stakeholder-engagement-simulator/backend/static
-sudo -u thameem cp -R dist /opt/stakeholder-engagement-simulator/backend/static
+sudo -u mohammedthameem rm -rf /opt/stakeholder-engagement-simulator/backend/static
+sudo -u mohammedthameem cp -R dist /opt/stakeholder-engagement-simulator/backend/static
 ```
 
 ### 12. Install the systemd service
@@ -259,23 +263,23 @@ rsync -avz \
 
 ```bash
 sudo cp -R ~/stakeholder-engagement-simulator-upload/. /opt/stakeholder-engagement-simulator/
-sudo chown -R thameem:www-data /opt/stakeholder-engagement-simulator
+sudo chown -R mohammedthameem:www-data /opt/stakeholder-engagement-simulator
 
 # If pyproject.toml / uv.lock changed:
-cd /opt/stakeholder-engagement-simulator/backend && sudo -u thameem uv sync
+cd /opt/stakeholder-engagement-simulator/backend && sudo -u mohammedthameem uv sync
 
 # If alembic/versions/ has new migrations:
-cd /opt/stakeholder-engagement-simulator/backend && sudo -u thameem uv run alembic upgrade head
+cd /opt/stakeholder-engagement-simulator/backend && sudo -u mohammedthameem uv run alembic upgrade head
 
 # If you re-ran scripts/build_persona_config.py or world chunks changed:
-cd /opt/stakeholder-engagement-simulator/backend && sudo -u thameem -E uv run python scripts/embed_and_load.py
+cd /opt/stakeholder-engagement-simulator/backend && sudo -u mohammedthameem -E uv run python scripts/embed_and_load.py
 
 # If frontend changed:
 cd /opt/stakeholder-engagement-simulator/frontend
-sudo -u thameem npm ci
-sudo -u thameem npm run build
-sudo -u thameem rm -rf /opt/stakeholder-engagement-simulator/backend/static
-sudo -u thameem cp -R dist /opt/stakeholder-engagement-simulator/backend/static
+sudo -u mohammedthameem npm ci
+sudo -u mohammedthameem npm run build
+sudo -u mohammedthameem rm -rf /opt/stakeholder-engagement-simulator/backend/static
+sudo -u mohammedthameem cp -R dist /opt/stakeholder-engagement-simulator/backend/static
 
 sudo systemctl restart stakeholder-engagement-simulator
 sudo systemctl status stakeholder-engagement-simulator
@@ -344,10 +348,10 @@ sudo ss -ltnp | grep 800
 
 Symptoms: browser shows `SDP exchange failed: 502 openai transport error: Illegal header value b'Bearer '`. Root cause: `.env` isn't being read.
 
-Fix: confirm `/opt/stakeholder-engagement-simulator/.env` exists, has `OPENAI_API_KEY=sk-…`, and is readable by the `thameem` user. `app/config.py` searches both `backend/.env` and the repo-root `.env`; the systemd unit also sets `EnvironmentFile=`, so any of those is fine.
+Fix: confirm `/opt/stakeholder-engagement-simulator/.env` exists, has `OPENAI_API_KEY=sk-…`, and is readable by the `mohammedthameem` user. `app/config.py` searches both `backend/.env` and the repo-root `.env`; the systemd unit also sets `EnvironmentFile=`, so any of those is fine.
 
 ```bash
-sudo -u thameem cat /opt/stakeholder-engagement-simulator/.env | grep OPENAI_API_KEY
+sudo -u mohammedthameem cat /opt/stakeholder-engagement-simulator/.env | grep OPENAI_API_KEY
 sudo systemctl restart stakeholder-engagement-simulator
 ```
 
@@ -369,9 +373,9 @@ The backend serves whatever is in `backend/static/`. If the UI looks old after a
 
 ```bash
 ls -la /opt/stakeholder-engagement-simulator/backend/static/   # check mtime
-sudo -u thameem rm -rf /opt/stakeholder-engagement-simulator/backend/static
-cd /opt/stakeholder-engagement-simulator/frontend && sudo -u thameem npm run build
-sudo -u thameem cp -R dist /opt/stakeholder-engagement-simulator/backend/static
+sudo -u mohammedthameem rm -rf /opt/stakeholder-engagement-simulator/backend/static
+cd /opt/stakeholder-engagement-simulator/frontend && sudo -u mohammedthameem npm run build
+sudo -u mohammedthameem cp -R dist /opt/stakeholder-engagement-simulator/backend/static
 sudo systemctl restart stakeholder-engagement-simulator
 ```
 

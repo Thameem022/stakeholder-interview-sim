@@ -4,7 +4,7 @@ After=network.target postgresql.service
 Wants=postgresql.service
 
 [Service]
-User=thameem
+User=mohammedthameem
 Group=www-data
 WorkingDirectory=/opt/stakeholder-engagement-simulator/backend
 EnvironmentFile=/opt/stakeholder-engagement-simulator/.env
