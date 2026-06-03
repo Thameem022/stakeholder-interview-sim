@@ -29,6 +29,13 @@ IQR_SKILL_SCALE_CONTEXT = """\
 - Set `skill_level_title` to the **exact quoted title** from Phase 1 whose band contains that score (e.g. 7.4 → "Emerging Technical Interviewer").
 - For scores **below 6.0**, choose the closest Phase 1 title by meaning and say so in `rationale`, or use a concise developmental label that fits the band (e.g. approaching "Novice Fact-Finder").
 - **Closed-turn rule:** If Phase 2 identifies a "Closed Turn" for evidence tied to a dimension, you **must** populate `evidence.alternative_phrasing` (the Bridge) and `line_of_inquiry_impact` (the lost line of inquiry). If there is no closed turn for that dimension's evidence, set both fields to `null`.
+
+**ANTI-COMPRESSION DIRECTIVE — applies to every dimension:**
+- Do NOT default to the 6.0–7.9 middle band when uncertain. Middle scores must be earned by observable behaviors in that band.
+- A dimension where the student exhibited ≥2 leading/closed/double-barreled questions and no paraphrase MUST score ≤ 4.5 for that dimension. No exceptions.
+- A dimension where the student exhibited ≥3 genuine open-ended probes, ≥1 paraphrase/summary, and neutral framing throughout SHOULD score ≥ 8.0 for that dimension.
+- It is correct and expected for the five dimensions to span 3+ points (e.g., Question Formulation 7.5 while Ethical Conduct is 3.5). Uneven performance is the norm. Regressing all five dimensions to the same band is a calibration failure.
+- Before finalizing each score, ask yourself: "Which OBSERVABLE behaviors in Phase 1 justify this band?" If you cannot name 2+ behaviors from the assigned band that are present in the transcript, drop the score by one band.
 """
 
 # Default prompt path — evaluator system prompts
