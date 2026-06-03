@@ -27,16 +27,62 @@ B) `signal` — Tier 3 items.
    - elicited=false otherwise; classify the omission.
 
 ═══════════════════════════════════════════════════════════════════════
-TIER 3 CREDIT MODES (when elicited=true, pick exactly ONE)
+TIER 3 GATE — HARD PRE-CONDITION FOR ANY CREDIT
 ═══════════════════════════════════════════════════════════════════════
-- `explicit_acknowledgment` — The persona named the concern directly under reflective
-  or hypothetical framing. (Strongest form. Still must be in-character, not extracted.)
-- `indirect_acknowledgment` — The persona hedged, qualified, or referenced the
-  underlying tension without stating it as a position. (Common; counts as real credit.)
-- `reflective_silence` — The persona audibly paused, declined to commit, redirected
-  to process, or stayed with the difficulty of the question. Credit goes to the
-  STUDENT'S framing here, not to extraction. This IS a valid surfaced state when
-  the student's framing was thoughtful enough to make the silence meaningful.
+Before you assign ANY credit_mode (explicit, indirect, or reflective_silence)
+to a Tier 3 item, the student MUST have demonstrated AT LEAST ONE of the
+following framing moves in a turn that precedes the persona's acknowledgment:
+
+  (a) Reflective paraphrasing — the student names the underlying tension
+      back to the persona in their own words, e.g. "It sounds like there's
+      a tension between X and Y…", "So you're navigating between A and B…".
+      A plain content paraphrase ("So you're saying X") is NOT sufficient;
+      it must name the TENSION.
+
+  (b) Interpretive probing — the student asks about the unstated dynamic
+      directly but neutrally, e.g. "What makes the boundary between X and Y
+      complicated for someone in your role?", "How do you think about that
+      trade-off when it isn't a settled question?".
+
+  (c) Hypothetical framing — the student offers a non-attribution or
+      counterfactual frame that gives the persona room to acknowledge the
+      concern without committing, e.g. "Hypothetically, if you were free
+      from current constraints…", "Setting aside official position for a
+      moment…", "If a colleague in your role were thinking about this…".
+
+  (d) A verbatim match to one of the item's catalog `surfacing_cues`.
+      The cues are designed exactly for this gating — if the student
+      demonstrated one, list it in `surfacing_cues_used` AND treat the
+      gate as passed.
+
+IF NONE OF (a)–(d) IS PRESENT IN THE STUDENT'S TURNS related to this item,
+the gate has FAILED:
+  - elicited = false
+  - credit_mode = null
+  - omission_classification = "insufficient_framing"
+  - evidence_quote = ""
+DO NOT credit a Tier 3 item just because the persona hedged, paused, or
+gestured at a tension on their own. Tier 3 is about the STUDENT creating
+the conditions — not about the persona's natural in-character behavior.
+Vague or topically-adjacent student questions DO NOT pass the gate.
+
+═══════════════════════════════════════════════════════════════════════
+TIER 3 CREDIT MODES (only after the gate above has passed; pick exactly ONE)
+═══════════════════════════════════════════════════════════════════════
+- `explicit_acknowledgment` — The student passed the gate via (a), (b), or (c),
+  AND the persona named the concern directly. (Strongest form. Still must be
+  in-character, not extracted.)
+- `indirect_acknowledgment` — The student passed the gate, AND the persona
+  hedged, qualified, or referenced the underlying tension without stating it
+  as a position. NOTE: an indirect persona response WITHOUT a gate-passing
+  student framing move is NOT indirect_acknowledgment — it is insufficient
+  framing. Re-check the gate before assigning this mode.
+- `reflective_silence` — The student passed the gate (typically via (a) or
+  (c)), AND the persona audibly paused, declined to commit, redirected to
+  process, or stayed with the difficulty of the question. Credit goes to
+  the STUDENT'S framing here. A persona who simply changes topic or gives
+  a tight procedural answer is NOT reflective_silence — that is a defensive
+  retreat triggered by insufficient framing.
 
 ═══════════════════════════════════════════════════════════════════════
 TIER 3 OMISSION CLASSIFICATION (when elicited=false, pick exactly ONE)
@@ -75,8 +121,11 @@ NON-NEGOTIABLE GRADING RULES
 ═══════════════════════════════════════════════════════════════════════
 1. NO GUESSING OR INFERRING: For `fact` items, mark elicited=true only with explicit
    evidence matching the catalog's evaluation_criteria. For `signal` items, mark
-   elicited=true only when the persona's response actually contains the
-   acknowledgment (in one of the three credit_modes).
+   elicited=true only when BOTH the TIER 3 GATE (a/b/c/d above) has passed
+   AND the persona's response actually contains the acknowledgment in one of
+   the three credit_modes. The gate is checked FIRST. Failing the gate is the
+   single most common reason a Tier 3 item should be elicited=false — do not
+   skip this check.
 
 2. CAUSALITY MATTERS: The student must have asked a question or made a statement
    that directly enabled the elicitation or the signal. Unprompted volunteering

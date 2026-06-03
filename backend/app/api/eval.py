@@ -102,6 +102,14 @@ async def eval_iqr(session_id: UUID):
 
     payload = iqr_result.model_dump()
 
+    # Surface the conversation turns to the frontend score report. The IQR
+    # transcript already normalizes role→speaker labels (Student / persona).
+    payload.setdefault("metadata", {})
+    payload["metadata"]["turns"] = [
+        {"turn_id": t.turn_id, "speaker": t.speaker, "text": t.text}
+        for t in iqr_transcript.turns
+    ]
+
     if isinstance(sic_result, Exception):
         logger.warning(f"SIC scoring failed for session {session_id}: {sic_result}")
         payload["insight_coverage"] = []
