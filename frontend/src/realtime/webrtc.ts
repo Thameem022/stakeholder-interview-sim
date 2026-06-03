@@ -24,6 +24,19 @@ export interface RealtimeCallbacks {
 export interface ConnectOptions {
   personaId: string
   voiceId?: string
+  /**
+   * If true, the local mic is fully silenced for the duration of every
+   * assistant response — from `response.created` (before any audio arrives)
+   * through `response.done`. We both:
+   *   - set `track.enabled = false`, AND
+   *   - call `sender.replaceTrack(null)` so the WebRTC sender transmits
+   *     literally nothing (not even silence packets) to the server.
+   * This is what prevents OpenAI's server VAD from ever seeing user audio
+   * during a response, so the persona can't be interrupted by playback
+   * bleed, background noise, or the user starting to talk too early.
+   * Server VAD is still on for user turns, so replies auto-commit — no buttons.
+   */
+  turnBased?: boolean
   callbacks: RealtimeCallbacks
 }
 
@@ -36,6 +49,8 @@ export class RealtimeWebRTCSession {
   private pc: RTCPeerConnection | null = null
   private dc: RTCDataChannel | null = null
   private localStream: MediaStream | null = null
+  private audioSender: RTCRtpSender | null = null
+  private audioTrack: MediaStreamTrack | null = null
   private audioEl: HTMLAudioElement | null = null
   private audioCtx: AudioContext | null = null
   private analyser: AnalyserNode | null = null
@@ -43,6 +58,8 @@ export class RealtimeWebRTCSession {
   private personaId = ''
   private assistantBuf = ''
   private toolArgsBuf: Record<string, string> = {}
+  private turnBased = false
+  private micMuted = false
 
   get analyserNode(): AnalyserNode | null {
     return this.analyser
@@ -54,10 +71,13 @@ export class RealtimeWebRTCSession {
 
   async connect(opts: ConnectOptions): Promise<void> {
     this.personaId = opts.personaId
+    this.turnBased = !!opts.turnBased
 
     const { ephemeral_key, session_id, model } = await getRealtimeToken(
       opts.personaId,
-      opts.voiceId
+      opts.voiceId,
+      undefined,
+      this.turnBased
     )
     this.sessionId = session_id
     opts.callbacks.onSessionReady?.(session_id)
@@ -78,7 +98,13 @@ export class RealtimeWebRTCSession {
       audio: { echoCancellation: true, noiseSuppression: true },
     })
     this.localStream = stream
-    stream.getTracks().forEach((t) => pc.addTrack(t, stream))
+    for (const track of stream.getTracks()) {
+      const sender = pc.addTrack(track, stream)
+      if (track.kind === 'audio') {
+        this.audioSender = sender
+        this.audioTrack = track
+      }
+    }
 
     const dc = pc.createDataChannel('oai-events')
     this.dc = dc
@@ -128,6 +154,9 @@ export class RealtimeWebRTCSession {
     this.pc = null
     this.dc = null
     this.localStream = null
+    this.audioSender = null
+    this.audioTrack = null
+    this.micMuted = false
     this.assistantBuf = ''
     this.toolArgsBuf = {}
     // sessionId left as-is so the caller can still navigate to /score/:id
@@ -140,6 +169,38 @@ export class RealtimeWebRTCSession {
       } catch {}
     }
     this.disconnect()
+  }
+
+  /**
+   * Fully gate the mic: flip `track.enabled` AND swap the sender's track to
+   * null so the WebRTC transport sends nothing at all. Idempotent — safe to
+   * call repeatedly from overlapping events (`response.created`, audio.delta).
+   */
+  private async muteMic(): Promise<void> {
+    if (this.micMuted) return
+    this.micMuted = true
+    if (this.audioTrack) this.audioTrack.enabled = false
+    if (this.audioSender) {
+      try {
+        await this.audioSender.replaceTrack(null)
+      } catch {
+        // If replaceTrack fails (older browser, renegotiation needed),
+        // track.enabled = false above is the fallback.
+      }
+    }
+  }
+
+  private async unmuteMic(): Promise<void> {
+    if (!this.micMuted) return
+    this.micMuted = false
+    if (this.audioTrack) this.audioTrack.enabled = true
+    if (this.audioSender && this.audioTrack) {
+      try {
+        await this.audioSender.replaceTrack(this.audioTrack)
+      } catch {
+        // Same fallback — track.enabled = true is already set.
+      }
+    }
   }
 
   private setupAnalyser(stream: MediaStream, cb: RealtimeCallbacks): void {
@@ -195,6 +256,13 @@ export class RealtimeWebRTCSession {
         break
       }
 
+      case 'response.created': {
+        // Earliest possible mute point — fires before audio_transcript.delta
+        // and audio.delta, so the user has no window to interrupt mid-response.
+        if (this.turnBased) void this.muteMic()
+        break
+      }
+
       case 'response.output_audio_transcript.delta':
       case 'response.audio_transcript.delta': {
         const delta = String(evt.delta ?? '')
@@ -205,19 +273,24 @@ export class RealtimeWebRTCSession {
 
       case 'response.output_audio.delta':
       case 'response.audio.delta': {
+        // Redundant with response.created above, but kept as a safety net in
+        // case response.created is skipped or muteMic() races.
+        if (this.turnBased) void this.muteMic()
         cb.onAssistantSpeakingChange?.(true)
         break
       }
 
-      case 'response.done': {
+      case 'response.done':
+      case 'response.cancelled': {
         const final = this.assistantBuf.trim()
-        if (final) {
+        if (final && t === 'response.done') {
           cb.onAssistantDone?.(final)
           if (this.sessionId) {
             void postTranscript(this.sessionId, 'assistant', final).catch(() => {})
           }
         }
         this.assistantBuf = ''
+        if (this.turnBased) void this.unmuteMic()
         cb.onAssistantSpeakingChange?.(false)
         break
       }

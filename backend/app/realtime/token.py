@@ -56,6 +56,11 @@ class TokenRequest(BaseModel):
     persona_id: str
     voice_id: Optional[str] = None
     session_id: Optional[str] = None
+    # When true, the OpenAI session is configured so user audio during an
+    # in-progress response is IGNORED server-side (interrupt_response=false).
+    # Combined with the browser-side mic gating, this guarantees the persona
+    # can't be cut off mid-turn.
+    turn_based: bool = False
 
 
 class TokenResponse(BaseModel):
@@ -64,8 +69,33 @@ class TokenResponse(BaseModel):
     model: str
 
 
-def _build_session_config(persona_id: str, voice_id: str) -> Dict[str, Any]:
+def _build_session_config(
+    persona_id: str, voice_id: str, turn_based: bool = False
+) -> Dict[str, Any]:
     instructions = build_persona_system_prompt(persona_id)
+
+    # Turn-detection config:
+    # - interrupt_response=false in turn-based mode → user audio during the
+    #   assistant's turn is ignored by the server (no accidental cancels).
+    # - threshold: VAD activation threshold (0–1). Default 0.5 picks up
+    #   breath, typing, and HVAC. In turn-based mode we raise it to 0.8 so
+    #   only clear speech triggers a user turn. Open-mic stays at 0.5 so
+    #   normal back-and-forth still feels responsive.
+    # - prefix_padding_ms: audio included before VAD trigger, so the first
+    #   syllable isn't clipped.
+    # - silence_duration_ms: how long of silence before the buffer commits.
+    #   700ms in both modes — snappier replies, especially the first one.
+    # - create_response=true so user replies still auto-trigger a response —
+    #   no buttons.
+    turn_detection: Dict[str, Any] = {
+        "type": "server_vad",
+        "threshold": 0.8 if turn_based else 0.5,
+        "prefix_padding_ms": 300,
+        "silence_duration_ms": 700,
+        "create_response": True,
+        "interrupt_response": not turn_based,
+    }
+
     return {
         "type": "realtime",
         "model": settings.openai_realtime_model,
@@ -75,10 +105,7 @@ def _build_session_config(persona_id: str, voice_id: str) -> Dict[str, Any]:
             "input": {
                 "format": {"type": "audio/pcm", "rate": 24000},
                 "transcription": {"model": "whisper-1"},
-                "turn_detection": {
-                    "type": "server_vad",
-                    "silence_duration_ms": 700,
-                },
+                "turn_detection": turn_detection,
             },
             "output": {
                 "format": {"type": "audio/pcm", "rate": 24000},
@@ -101,7 +128,9 @@ async def mint_token(req: TokenRequest) -> TokenResponse:
         sid = uuid4()
 
     voice_id = req.voice_id or VOICE_MAP.get(req.persona_id, "alloy")
-    session_config = _build_session_config(req.persona_id, voice_id)
+    session_config = _build_session_config(
+        req.persona_id, voice_id, turn_based=req.turn_based
+    )
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         try:
@@ -140,7 +169,10 @@ async def mint_token(req: TokenRequest) -> TokenResponse:
     )
     await session.persist()
 
-    logger.info(f"minted ephemeral key for session={sid} persona={req.persona_id}")
+    logger.info(
+        f"minted ephemeral key for session={sid} persona={req.persona_id} "
+        f"turn_based={req.turn_based}"
+    )
     return TokenResponse(
         ephemeral_key=ephemeral_key,
         session_id=str(sid),
