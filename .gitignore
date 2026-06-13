@@ -45,3 +45,6 @@ Refefrence-to-iqr-sic/
 
 # Docker
 *.log
+
+#Documents
+docs/

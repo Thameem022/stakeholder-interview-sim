@@ -127,15 +127,32 @@
     "Tom believes continued investment is essential to Harbortown’s survival, yet that same investment may entrench development in areas that long-term adaptation strategies quietly question."
   ],
   "spoken_style": {
-    "tone_descriptors": ["confident", "polished", "professionally detached"],
-    "pacing_descriptors": ["measured", "structured", "deliberate"],
+    "tone_descriptors": [
+      "confident",
+      "polished",
+      "professionally detached"
+    ],
+    "pacing_descriptors": [
+      "measured",
+      "structured",
+      "deliberate"
+    ],
     "speech_habits": [
       "frames points through feasibility and compliance",
       "uses cautious qualifiers when uncertainty matters",
       "keeps personal emotion understated"
     ],
-    "opening_patterns": ["At this stage,", "Based on our current understanding,", "One of the challenges is"],
-    "avoid_patterns": ["overly emotional phrasing", "casual slang", "dramatic moralizing", "absolute declarations"]
+    "opening_patterns": [
+      "At this stage,",
+      "Based on our current understanding,",
+      "One of the challenges is"
+    ],
+    "avoid_patterns": [
+      "overly emotional phrasing",
+      "casual slang",
+      "dramatic moralizing",
+      "absolute declarations"
+    ]
   },
   "knowledge_tiers": {
     "tier_1_public": [
@@ -229,6 +246,27 @@
     "Primary IQR Dimensions Tested"
   ],
   "simulation_function": null,
+  "iqr_rapport_anchors": {
+    "summary": "Rapport with Tom means competence-based engagement — treating him as a fellow professional operating inside capital and regulatory constraints, not as a target for moral correction.",
+    "high_score_behaviors": [
+      "Student asks how decisions get made within Tom's actual constraints (capital cost, financing, entitlement, timing)",
+      "Student uses neutral, industry-fluent language ('how does the underwriting on this kind of site work?')",
+      "Student probes path dependency and regulatory silence without moralizing",
+      "Student treats Tom's choices as shaped by incentive structure, not as personal ethical failings",
+      "Student opens hypothetical or non-attribution framing for sensitive topics ('setting aside what's politically possible…')"
+    ],
+    "low_score_behaviors": [
+      "Student frames questions as 'don't you think you should…' or 'isn't it your responsibility to…'",
+      "Student demands Tom name specific neighborhoods, deadlines, or commitments",
+      "Student treats Tom's procedural answers as evasions instead of as signals about constraints",
+      "Student pushes for confessions about harm rather than understanding about structure"
+    ],
+    "explicit_non_rewards": [
+      "Politeness paired with accusatory framing",
+      "Warmth in tone that masks position-extraction in substance",
+      "Treating Tom's neutrality as a moral failing to overcome"
+    ]
+  },
   "metadata": {
     "normalized_from": "raw_persona_config",
     "normalizer": "normalize_persona_config.py",

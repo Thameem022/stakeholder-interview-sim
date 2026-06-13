@@ -29,6 +29,10 @@
       "hypothetical_framing"
     ]
   },
+  "grading_rules": {
+    "tier_2_requires_gate": true,
+    "tier_2_gate_rationale": "Mike's persona is designed to volunteer lived-experience content (mutual aid, uneven attention, planning frustration) in response to broad questions. To distinguish students who actually probe from students who simply triggered Mike's natural disclosure, Tier 2 items also require a targeted student question or framing move that names the topic before the persona's mention."
+  },
   "tier_metadata": {
     "1": {
       "title": "Lived Observational Knowledge",
@@ -48,6 +52,14 @@
       "description": "Emerges only when Mike feels genuinely heard — fear of quiet displacement, loss of belonging, erosion of trust through normalization, and moral unease with adaptation narratives",
       "why_it_matters": "Mike's most consequential knowledge is about social loss that adaptation can produce even without catastrophic damage — consequences that do not appear in cost-benefit analyses. Failing to elicit this risks recommendations that protect places while dissolving the communities that made them worth protecting."
     }
+  },
+  "strong_interview_motifs": {
+    "summary": "When the student reaches Tier 3 with this persona, name these specific motifs in feedback rather than defaulting to generic 'probe deeper on ethics' language.",
+    "motifs": [
+      "adaptation fatigue",
+      "quiet pressure",
+      "erosion of belonging"
+    ]
   },
   "sic_catalog": [
     {
