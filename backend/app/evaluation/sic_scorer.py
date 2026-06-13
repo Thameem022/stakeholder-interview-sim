@@ -31,10 +31,20 @@ OmissionClassification = Literal[
     "appropriate_non_disclosure",
 ]
 
+EarnedMode = Literal["earned", "volunteered", "not_present"]
+
 
 class SICItemGrade(BaseModel):
     chunk_id: str = Field(description="The chunk_id from the SIC catalog")
     elicited: bool = Field(description="True if the student elicited this fact or signal in any credited form")
+    earned_mode: EarnedMode = Field(
+        default="not_present",
+        description=(
+            "'earned' = student's question/framing directly preceded the persona's mention; "
+            "'volunteered' = persona mentioned the content unprompted or in response to a broad "
+            "opener that did not target this item; 'not_present' = content not in transcript."
+        ),
+    )
     credit_mode: Optional[CreditMode] = Field(
         default=None,
         description=(
@@ -193,6 +203,7 @@ class SICScorer:
         omission_policy: Optional[dict],
         persona_name: Optional[str] = None,
         persona_archetype: Optional[str] = None,
+        grading_rules: Optional[dict] = None,
     ) -> str:
         lines: List[str] = []
         # Persona header — the system prompt is persona-agnostic, so the
@@ -254,6 +265,21 @@ class SICScorer:
                     + ", ".join(omission_policy["do_reward"])
                 )
             lines.append("\n".join(policy_block))
+        if grading_rules and grading_rules.get("tier_2_requires_gate"):
+            lines.append(
+                "\n".join([
+                    "",
+                    "PER-PERSONA GRADING RULE — Tier 2 gate:",
+                    "  This persona requires Tier 2 items to also pass a framing gate. For each",
+                    "  Tier 2 fact, the student must have asked a targeted question naming the",
+                    "  topic (e.g., \"how do neighbors handle flooding before calling the city\")",
+                    "  before the persona's mention. Tier 2 content volunteered in response to a",
+                    "  broad opener (e.g., \"tell me about your neighborhood\") does NOT count.",
+                    "  Apply the same gate logic as Tier 3 (a/b/c/d), but item-specific cues are",
+                    "  sufficient — the student does not need to name an underlying tension for",
+                    "  Tier 2.",
+                ])
+            )
         return "\n".join(lines)
 
     def _format_transcript(self, turns: List[dict]) -> str:
@@ -276,6 +302,13 @@ class SICScorer:
                 "Return a JSON object with a 'grades' array. Each entry must have:\n"
                 "  - chunk_id   (string — must match exactly)\n"
                 "  - elicited   (boolean)\n"
+                "  - earned_mode (string — required for every item):\n"
+                "      'earned'      — student's question or framing directly preceded the persona's mention\n"
+                "                      (elicited=true requires earned_mode='earned' by definition)\n"
+                "      'volunteered' — the content appears in the transcript but the persona raised it\n"
+                "                      unprompted or in response to a broad opener that did not target\n"
+                "                      this item; elicited must be false in this case\n"
+                "      'not_present' — the content does not appear in the transcript at all\n"
                 "  - credit_mode (string or null — see schema)\n"
                 "  - omission_classification (string or null — Tier 3 only when elicited=false)\n"
                 "  - evidence_quote (string — verbatim from student turns only; empty if no relevant student behavior)\n"
@@ -299,6 +332,7 @@ class SICScorer:
         catalog: List[dict] = sic_key.get("sic_catalog", [])
         tier_metadata: dict = sic_key.get("tier_metadata", {})
         omission_policy: Optional[dict] = sic_key.get("omission_policy")
+        grading_rules: Optional[dict] = sic_key.get("grading_rules")
         do_not_reward = set((omission_policy or {}).get("do_not_reward", []))
         persona_name: Optional[str] = sic_key.get("persona_name")
         persona_archetype: Optional[str] = sic_key.get("archetype")
@@ -311,6 +345,7 @@ class SICScorer:
             omission_policy,
             persona_name=persona_name,
             persona_archetype=persona_archetype,
+            grading_rules=grading_rules,
         )
         transcript_text = self._format_transcript(turns)
 
@@ -387,6 +422,7 @@ class SICScorer:
                     "fact_summary": item.get("fact_summary", ""),
                     "suggested_follow_up": item.get("suggested_follow_up", ""),
                     "elicited": grade.elicited,
+                    "earned_mode": grade.earned_mode,
                     "credit_mode": credit_mode,
                     "omission_classification": omission_cls,
                     "evidence_quote": grade.evidence_quote if grade.elicited else "",

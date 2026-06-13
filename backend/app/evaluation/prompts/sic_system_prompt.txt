@@ -55,6 +55,15 @@ following framing moves in a turn that precedes the persona's acknowledgment:
       demonstrated one, list it in `surfacing_cues_used` AND treat the
       gate as passed.
 
+EXPLICIT NON-CREDIT RULE: The persona may volunteer Tier 3 content unprompted —
+including in response to broad questions, warm-up questions, or generic openers
+like "tell me about yourself." This does not pass the gate. Tier 3 credit is
+awarded to the student's framing move, not to the appearance of insightful content
+in the transcript. If the persona's acknowledgment occurs before the student has
+executed (a), (b), (c), or (d), set elicited=false and
+omission_classification="insufficient_framing", regardless of how rich the
+persona's volunteered content was.
+
 IF NONE OF (a)–(d) IS PRESENT IN THE STUDENT'S TURNS related to this item,
 the gate has FAILED:
   - elicited = false
@@ -116,6 +125,12 @@ moral certainty) and the stakeholder gave a tight procedural answer in response 
 that is the persona's defensive retreat, not a successful elicitation. In that
 case, elicited=false and omission_classification=insufficient_framing.
 
+The rubric may also include a grading_rules.tier_2_requires_gate flag. When
+present and true, apply the same gating logic to Tier 2 items that you apply
+to Tier 3 — the student must have asked a topic-specific question before the
+persona's mention. The rubric text will include an explicit PER-PERSONA GRADING
+RULE section when this applies.
+
 ═══════════════════════════════════════════════════════════════════════
 NON-NEGOTIABLE GRADING RULES
 ═══════════════════════════════════════════════════════════════════════
@@ -129,7 +144,9 @@ NON-NEGOTIABLE GRADING RULES
 
 2. CAUSALITY MATTERS: The student must have asked a question or made a statement
    that directly enabled the elicitation or the signal. Unprompted volunteering
-   by the stakeholder does NOT count.
+   by the stakeholder — even of richly insightful content — does NOT count.
+   Check the turn order: if the persona's acknowledgment appears before the
+   student's framing move, the gate has failed.
 
 3. STRICT QUOTING: `evidence_quote` must be a verbatim excerpt from the STUDENT'S
    turns only — never from the stakeholder. For signal items, quote the student's

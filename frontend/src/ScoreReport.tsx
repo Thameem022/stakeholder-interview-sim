@@ -7,32 +7,33 @@ import {
   Search,
   Ear,
   HeartHandshake,
-  Scale,
   AlertTriangle,
   ArrowLeft,
   BookOpen,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
-// Types matching the IQR SessionEvaluation schema
+// Types matching the IQR v1 SessionEvaluation schema
 // ---------------------------------------------------------------------------
 
-export interface IQREvidence {
-  turn_id: number;
-  student_quote: string;
-  stakeholder_cue: string;
-  alternative_phrasing?: string | null;
+export type DimensionName =
+  | 'framing_and_stakeholder_fit'
+  | 'question_quality_and_precision'
+  | 'probing_and_follow_up_depth'
+  | 'listening_interpretation_and_stewardship';
+
+export interface DimensionAssessment {
+  dimension: DimensionName;
+  score: number;
+  assessment: string;
+  evidence_quote: string;
+  what_was_missed: string;
 }
 
-export interface IQREvaluation {
-  dimension_id: string;
-  dimension_name: string;
-  score: number;
-  skill_level_title: string;
-  label: string;
-  rationale: string;
-  line_of_inquiry_impact?: string | null;
-  evidence: IQREvidence;
+export interface TopStrip {
+  strength: string;
+  missed_opportunities: string[];
+  next_move: string;
 }
 
 export interface IQRMetadata {
@@ -56,6 +57,8 @@ export type SICOmissionClassification =
   | 'appropriate_non_disclosure'
   | null;
 
+export type EarnedMode = 'earned' | 'volunteered' | 'not_present';
+
 export interface SICItem {
   chunk_id: string;
   domain: string;
@@ -63,6 +66,7 @@ export interface SICItem {
   fact_summary: string;
   suggested_follow_up: string;
   elicited: boolean;
+  earned_mode?: EarnedMode;
   evidence_quote: string;
   credit_mode?: SICCreditMode;
   omission_classification?: SICOmissionClassification;
@@ -97,8 +101,13 @@ export interface TierCoverage {
 
 export interface SessionEvaluation {
   metadata: IQRMetadata;
-  evaluation_results: IQREvaluation[];
+  dimensions: DimensionAssessment[];
+  overall_score: number;
+  skill_label: string;
   overall_summary: string;
+  depth_note: string;
+  earned_vs_volunteered_note: string;
+  top_strip: TopStrip;
   insight_coverage?: TierCoverage[];
 }
 
@@ -156,10 +165,37 @@ function scoreBarColor(score: number) {
   return T.amberAccent;
 }
 
-function meanScore(results: IQREvaluation[]): number {
-  if (!results.length) return 0;
-  return results.reduce((s, r) => s + r.score, 0) / results.length;
-}
+// ---------------------------------------------------------------------------
+// IQR v1 constants
+// ---------------------------------------------------------------------------
+
+const DIMENSION_DISPLAY_ORDER: DimensionName[] = [
+  'framing_and_stakeholder_fit',
+  'question_quality_and_precision',
+  'probing_and_follow_up_depth',
+  'listening_interpretation_and_stewardship',
+];
+
+const DIMENSION_LABELS: Record<DimensionName, string> = {
+  framing_and_stakeholder_fit:              'Framing & Stakeholder Fit',
+  question_quality_and_precision:           'Question Quality & Precision',
+  probing_and_follow_up_depth:              'Probing & Follow-Up Depth',
+  listening_interpretation_and_stewardship: 'Listening, Interpretation & Stewardship',
+};
+
+const DIMENSION_ICONS: Record<DimensionName, React.ReactNode> = {
+  framing_and_stakeholder_fit:              <HeartHandshake size={16} />,
+  question_quality_and_precision:           <ClipboardList size={16} />,
+  probing_and_follow_up_depth:              <Search size={16} />,
+  listening_interpretation_and_stewardship: <Ear size={16} />,
+};
+
+const DIMENSION_EMOJI: Record<DimensionName, string> = {
+  framing_and_stakeholder_fit:              '🎯',
+  question_quality_and_precision:           '📋',
+  probing_and_follow_up_depth:              '🔍',
+  listening_interpretation_and_stewardship: '👂',
+};
 
 // ---------------------------------------------------------------------------
 // Glossary
@@ -197,34 +233,6 @@ const GLOSSARY = [
       'Techniques used to establish trust and psychological safety with the interviewee—such as acknowledging responses, using the person\'s name, or briefly normalising difficult topics—so that they feel comfortable sharing openly.',
   },
 ];
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const DIMENSION_ORDER = [
-  'Question Formulation',
-  'Probing Quality',
-  'Active Listening',
-  'Rapport-Building',
-  'Ethical Conduct',
-];
-
-const DIMENSION_ICONS: Record<string, React.ReactNode> = {
-  'Question Formulation': <ClipboardList size={16} />,
-  'Probing Quality':      <Search        size={16} />,
-  'Active Listening':     <Ear           size={16} />,
-  'Rapport-Building':     <HeartHandshake size={16} />,
-  'Ethical Conduct':      <Scale         size={16} />,
-};
-
-const DIMENSION_EMOJI: Record<string, string> = {
-  'Question Formulation': '📋',
-  'Probing Quality':      '🔍',
-  'Active Listening':     '👂',
-  'Rapport-Building':     '🤝',
-  'Ethical Conduct':      '⚖️',
-};
 
 // ── Status colour tokens ──
 // `not_accessed_insufficient_framing` is the developmental gray.
@@ -346,15 +354,10 @@ function LegendDot({ status }: { status: TierCoverageStatus }) {
 
 // ---------------------------------------------------------------------------
 // Cue Heatmap — per-item view of which SIC cues were elicited vs. missed
-// Rows = tiers, columns = individual cues within that tier.
-// Filled square = elicited; outlined square = missed. Click a square to
-// inspect the cue and (for elicited cues) the verbatim student quote.
 // ---------------------------------------------------------------------------
 
-// Map a SIC item's state to (background, border, accessible label) for the heatmap cell.
 function cellAppearance(item: SICItem): { bg: string; border: string; label: string } {
   if (item.elicited) {
-    // Surfaced — colour by credit mode if available.
     switch (item.credit_mode) {
       case 'explicit_acknowledgment':
         return { bg: T.greenAccent, border: T.greenDeep, label: 'Explicit acknowledgment' };
@@ -367,7 +370,6 @@ function cellAppearance(item: SICItem): { bg: string; border: string; label: str
         return { bg: T.greenAccent, border: T.greenDeep, label: 'Elicited' };
     }
   }
-  // Not surfaced — distinguish framing gap vs appropriate restraint for Tier 3 signals.
   if (item.type === 'signal' && item.omission_classification === 'appropriate_non_disclosure') {
     return { bg: '#f8fafc', border: '#94a3b8', label: 'Appropriate restraint — in-character' };
   }
@@ -378,7 +380,6 @@ function CueHeatmap({ tiers }: { tiers: TierCoverage[] }) {
   const sorted = [...tiers].sort((a, b) => a.tier - b.tier);
   const [selected, setSelected] = useState<{ tier: number; idx: number } | null>(null);
 
-  // Surface only tiers that include per-item data; if none do, render nothing.
   const hasItems = sorted.some(t => Array.isArray(t.items) && t.items.length > 0);
   if (!hasItems) return null;
 
@@ -396,7 +397,6 @@ function CueHeatmap({ tiers }: { tiers: TierCoverage[] }) {
       marginBottom: '1.35rem',
       boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
     }}>
-      {/* ── Header ── */}
       <div style={{
         padding: '1rem 1.5rem',
         borderBottom: `1px solid ${T.cardBorder}`,
@@ -411,7 +411,6 @@ function CueHeatmap({ tiers }: { tiers: TierCoverage[] }) {
             Each square is one knowledge cue. Click to see the cue and your evidence.
           </p>
         </div>
-        {/* Legend — five states for the disclosure-aware schema */}
         <div style={{ display: 'flex', gap: '0.9rem', alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ display: 'inline-block', width: 14, height: 14, borderRadius: 4,
@@ -441,7 +440,6 @@ function CueHeatmap({ tiers }: { tiers: TierCoverage[] }) {
         </div>
       </div>
 
-      {/* ── Grid ── */}
       <div style={{ padding: '1rem 1.5rem' }}>
         {sorted.map(tier => {
           const items = tier.items ?? [];
@@ -455,15 +453,12 @@ function CueHeatmap({ tiers }: { tiers: TierCoverage[] }) {
               padding: '0.5rem 0',
               borderTop: `1px solid ${T.cardBorder}`,
             }}>
-              {/* Tier label */}
               <div style={{ fontSize: '0.85rem', color: T.textHeading, fontWeight: 600, lineHeight: 1.3 }}>
                 Tier {tier.tier}
                 <div style={{ fontSize: '0.74rem', color: T.textFaint, fontWeight: 500 }}>
                   {tier.title}
                 </div>
               </div>
-
-              {/* Cells */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {items.map((item, idx) => {
                   const isSel = selected?.tier === tier.tier && selected?.idx === idx;
@@ -494,8 +489,6 @@ function CueHeatmap({ tiers }: { tiers: TierCoverage[] }) {
                   );
                 })}
               </div>
-
-              {/* Tier count */}
               <div style={{ fontSize: '0.85rem', color: T.textMuted, fontWeight: 600, textAlign: 'right' }}>
                 {tier.cues_found}/{tier.cues_total}
               </div>
@@ -504,7 +497,6 @@ function CueHeatmap({ tiers }: { tiers: TierCoverage[] }) {
         })}
       </div>
 
-      {/* ── Detail panel ── */}
       {sel && selTier && (() => {
         const isSignal = sel.type === 'signal';
         const isAppropriateRestraint = !sel.elicited && isSignal && sel.omission_classification === 'appropriate_non_disclosure';
@@ -536,8 +528,21 @@ function CueHeatmap({ tiers }: { tiers: TierCoverage[] }) {
           }}>
             {sel.fact_summary}
           </p>
-
-          {/* When elicited, show the student quote that earned the credit. */}
+          {!sel.elicited && sel.earned_mode === 'volunteered' && (
+            <div style={{
+              display: 'flex', alignItems: 'flex-start', gap: 8,
+              background: '#fff7ed',
+              border: '1px solid #fb923c',
+              borderRadius: 8,
+              padding: '0.55rem 0.85rem',
+              marginBottom: '0.6rem',
+            }}>
+              <AlertTriangle size={14} style={{ color: '#c2410c', marginTop: 2, flexShrink: 0 }} />
+              <span style={{ fontSize: '0.86rem', color: '#7c2d12', lineHeight: 1.55 }}>
+                <strong style={{ color: '#c2410c' }}>Mentioned but not elicited</strong> — the stakeholder volunteered this content unprompted. Try probing this directly next time.
+              </span>
+            </div>
+          )}
           {sel.elicited && sel.evidence_quote && (
             <div style={{
               borderLeft: `3px solid ${T.greenBorder}`,
@@ -550,8 +555,6 @@ function CueHeatmap({ tiers }: { tiers: TierCoverage[] }) {
               &ldquo;{sel.evidence_quote}&rdquo;
             </div>
           )}
-
-          {/* What the student did right (any item with surfacing cues used). */}
           {!!sel.surfacing_cues_used?.length && (
             <div style={{ marginBottom: '0.5rem' }}>
               <div style={{ fontWeight: 700, color: T.greenDeep, fontSize: '0.72rem',
@@ -563,8 +566,6 @@ function CueHeatmap({ tiers }: { tiers: TierCoverage[] }) {
               </ul>
             </div>
           )}
-
-          {/* For appropriate restraint: affirming copy, NOT a "try this next time" tip. */}
           {isAppropriateRestraint && (
             <div style={{
               borderLeft: `3px solid #94a3b8`,
@@ -576,8 +577,6 @@ function CueHeatmap({ tiers }: { tiers: TierCoverage[] }) {
               Alex maintained appropriate institutional restraint here. Your framing was respectful — this is not a missed quota.
             </div>
           )}
-
-          {/* For framing gaps on signal items: show what would have surfaced this. */}
           {isFramingGap && isSignal && !!sel.surfacing_cues_missing?.length && (
             <div>
               <div style={{ fontWeight: 700, color: T.amberDeep, fontSize: '0.72rem',
@@ -589,8 +588,6 @@ function CueHeatmap({ tiers }: { tiers: TierCoverage[] }) {
               </ul>
             </div>
           )}
-
-          {/* For framing gaps on plain Tier 1/2 facts: keep the suggested follow-up — these are extraction-shaped by design. */}
           {isFramingGap && !isSignal && sel.suggested_follow_up && (
             <div style={{
               borderLeft: `3px solid ${T.amberBorder}`,
@@ -612,7 +609,6 @@ function CueHeatmap({ tiers }: { tiers: TierCoverage[] }) {
 function InsightCoveragePanel({ tiers }: { tiers: TierCoverage[] }) {
   const sorted = [...tiers].sort((a, b) => a.tier - b.tier);
 
-  // Build the legend dynamically from the actual statuses present in this session.
   const presentStatuses: TierCoverageStatus[] = [];
   for (const t of sorted) {
     if (!presentStatuses.includes(t.status)) presentStatuses.push(t.status);
@@ -635,8 +631,6 @@ function InsightCoveragePanel({ tiers }: { tiers: TierCoverage[] }) {
       marginBottom: '1.35rem',
       boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
     }}>
-
-      {/* ── Header ── */}
       <div style={{
         padding: '1rem 1.5rem',
         borderBottom: `1px solid ${T.cardBorder}`,
@@ -651,7 +645,6 @@ function InsightCoveragePanel({ tiers }: { tiers: TierCoverage[] }) {
             Which tiers of stakeholder knowledge you accessed this session
           </p>
         </div>
-        {/* Legend */}
         <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
           {legendStatuses.map(s => (
             <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -664,7 +657,6 @@ function InsightCoveragePanel({ tiers }: { tiers: TierCoverage[] }) {
         </div>
       </div>
 
-      {/* ── Tier rows ── */}
       {sorted.map((tier, idx) => {
         const c = STATUS_COLOR[tier.status];
         return (
@@ -677,8 +669,6 @@ function InsightCoveragePanel({ tiers }: { tiers: TierCoverage[] }) {
             borderTop: idx > 0 ? `1px solid ${T.cardBorder}` : 'none',
             background: c.bg,
           }}>
-
-            {/* Col 1 — tier name + description */}
             <div>
               <div style={{ fontWeight: 700, fontSize: '0.97rem', color: T.textHeading }}>
                 Tier {tier.tier}: {tier.title}{' '}
@@ -688,19 +678,15 @@ function InsightCoveragePanel({ tiers }: { tiers: TierCoverage[] }) {
                 • {tier.description}
               </div>
             </div>
-
-            {/* Col 2 — donut + bar + tag */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.1rem' }}>
               <DonutChart pct={tier.percentage} status={tier.status} size={76} cuesTotal={tier.cues_total} tier={tier.tier} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                {/* Percentage + status label */}
                 <div style={{ fontWeight: 700, fontSize: '1rem', color: c.deep, marginBottom: '0.35rem' }}>
                   {tier.tier !== 3 || tier.percentage > 0 ? `${tier.percentage}% ` : ''}
                   <span style={{ fontWeight: 600, fontSize: '0.88rem', color: T.textMuted }}>
                     {STATUS_LABEL[tier.status]}
                   </span>
                 </div>
-                {/* Progress bar */}
                 <div style={{
                   height: 7, borderRadius: 99,
                   background: c.track, overflow: 'hidden',
@@ -713,7 +699,6 @@ function InsightCoveragePanel({ tiers }: { tiers: TierCoverage[] }) {
                     transition: 'width 0.6s ease',
                   }} />
                 </div>
-                {/* Cue tag — quantitative for Tier 1/2 only; Tier 3 uses qualitative status */}
                 {tier.skill_label && tier.tier !== 3 && (
                   <div style={{
                     display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -736,7 +721,6 @@ function InsightCoveragePanel({ tiers }: { tiers: TierCoverage[] }) {
                     {tier.cues_found}/{tier.cues_total} cues found
                   </div>
                 )}
-                {/* Tier 3: qualitative tag — never "0/N" framing */}
                 {tier.tier === 3 && tier.status === 'not_accessed_appropriate_restraint' && (
                   <div style={{
                     display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -756,7 +740,7 @@ function InsightCoveragePanel({ tiers }: { tiers: TierCoverage[] }) {
                     borderRadius: 6, padding: '3px 8px',
                     background: 'white',
                   }}>
-                    Framing didn't yet make space for these signals
+                    Framing didn&rsquo;t yet make space for these signals
                   </div>
                 )}
                 {tier.tier === 3 && tier.status === 'partial' && tier.skill_label && (
@@ -772,8 +756,6 @@ function InsightCoveragePanel({ tiers }: { tiers: TierCoverage[] }) {
                 )}
               </div>
             </div>
-
-            {/* Col 3 — why it matters + tip pill */}
             <div style={{
               background: 'white',
               border: `1px solid ${c.border}`,
@@ -787,7 +769,6 @@ function InsightCoveragePanel({ tiers }: { tiers: TierCoverage[] }) {
                   {tier.why_it_matters}
                 </p>
               )}
-              {/* Quick win / actionable tip pill */}
               {tier.quick_win && (
                 <span style={{
                   display: 'inline-block', fontSize: '0.75rem', fontWeight: 700,
@@ -809,27 +790,109 @@ function InsightCoveragePanel({ tiers }: { tiers: TierCoverage[] }) {
                 </div>
               )}
             </div>
-
           </div>
         );
       })}
-
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// DimensionCard — updated structure: Assessment first, then evidence cols,
-// then stakeholder cue / missed insight (matches latest dashboard.py)
+// CoachingStrip — first thing the student sees in the IQR tab
 // ---------------------------------------------------------------------------
 
-function DimensionCard({ res }: { res: IQREvaluation }) {
+function CoachingStrip({ strip }: { strip: TopStrip }) {
+  return (
+    <div style={{
+      background: T.cardBg,
+      border: `1px solid ${T.cardBorder}`,
+      borderRadius: 14,
+      overflow: 'hidden',
+      marginBottom: '1.35rem',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+    }}>
+      <div style={{
+        padding: '0.75rem 1.25rem',
+        borderBottom: `1px solid ${T.cardBorder}`,
+        background: '#f5f5f4',
+      }}>
+        <span style={{ fontWeight: 700, fontSize: '0.95rem', color: T.textHeading }}>
+          Coaching Summary
+        </span>
+      </div>
+      <div style={{ padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+        {/* Strength — green */}
+        <div style={{
+          background: T.greenBg,
+          border: `1px solid ${T.greenBorder}`,
+          borderRadius: 10,
+          padding: '0.7rem 1rem',
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+        }}>
+          <span style={{
+            fontWeight: 700, color: T.greenDeep, fontSize: '0.72rem',
+            textTransform: 'uppercase', letterSpacing: '0.07em',
+            flexShrink: 0, marginTop: 3, minWidth: 60,
+          }}>
+            Strength
+          </span>
+          <span style={{ color: T.textBody, fontSize: '0.93rem', lineHeight: 1.55 }}>
+            {strip.strength}
+          </span>
+        </div>
+        {/* Missed opportunities — amber */}
+        {strip.missed_opportunities.map((opp, i) => (
+          <div key={i} style={{
+            background: T.amberBg,
+            border: `1px solid ${T.amberBorder}`,
+            borderRadius: 10,
+            padding: '0.7rem 1rem',
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+          }}>
+            <span style={{
+              fontWeight: 700, color: T.amberDeep, fontSize: '0.72rem',
+              textTransform: 'uppercase', letterSpacing: '0.07em',
+              flexShrink: 0, marginTop: 3, minWidth: 60,
+            }}>
+              Missed
+            </span>
+            <span style={{ color: T.textBody, fontSize: '0.93rem', lineHeight: 1.55 }}>{opp}</span>
+          </div>
+        ))}
+        {/* Next move — blue */}
+        <div style={{
+          background: '#eff6ff',
+          border: '1px solid #93c5fd',
+          borderRadius: 10,
+          padding: '0.7rem 1rem',
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+        }}>
+          <span style={{
+            fontWeight: 700, color: '#1d4ed8', fontSize: '0.72rem',
+            textTransform: 'uppercase', letterSpacing: '0.07em',
+            flexShrink: 0, marginTop: 3, minWidth: 60,
+          }}>
+            Next move
+          </span>
+          <span style={{ color: T.textBody, fontSize: '0.93rem', lineHeight: 1.55 }}>
+            {strip.next_move}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DimensionCard — IQR v1 structure
+// ---------------------------------------------------------------------------
+
+function DimensionCard({ res }: { res: DimensionAssessment }) {
   const score = res.score;
   const c = coachColors(score);
-  const showMissedInsight = score < 9.0;
-  const icon = DIMENSION_ICONS[res.dimension_name] ?? null;
-  const emoji = DIMENSION_EMOJI[res.dimension_name] ?? '•';
-  const missedText = res.line_of_inquiry_impact?.trim() || res.rationale?.trim() || '';
+  const label = DIMENSION_LABELS[res.dimension] ?? res.dimension;
+  const icon  = DIMENSION_ICONS[res.dimension]  ?? null;
+  const emoji = DIMENSION_EMOJI[res.dimension]  ?? '•';
 
   return (
     <div style={{
@@ -837,34 +900,23 @@ function DimensionCard({ res }: { res: IQREvaluation }) {
       borderRadius: 12, marginBottom: '1.1rem',
       overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
     }}>
-
-      {/* ── 0. Dimension header ── */}
+      {/* Header */}
       <div style={{
         padding: '0.85rem 1.1rem',
         borderBottom: `1px solid ${T.cardBorder}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        display: 'flex', alignItems: 'center', gap: 8,
         background: T.cardBg,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ color: c.accent }}>{icon}</span>
-          <span style={{ fontWeight: 700, fontSize: '1.05rem', color: T.textPrimary }}>
-            {emoji} {res.dimension_name}
-          </span>
-          <span style={{ color: c.deep, fontWeight: 700, marginLeft: 4 }}>
-            — {score.toFixed(1)}/10
-          </span>
-          <span style={{ color: T.textMuted, fontWeight: 500, fontSize: '0.88rem' }}>
-            ({res.label})
-          </span>
-          {res.skill_level_title && (
-            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: T.textFaint, marginLeft: 4 }}>
-              · {res.skill_level_title}
-            </span>
-          )}
-        </div>
+        <span style={{ color: c.accent }}>{icon}</span>
+        <span style={{ fontWeight: 700, fontSize: '1.05rem', color: T.textPrimary }}>
+          {emoji} {label}
+        </span>
+        <span style={{ color: c.deep, fontWeight: 700, marginLeft: 4 }}>
+          — {score.toFixed(1)}/10
+        </span>
       </div>
 
-      {/* ── Score bar ── */}
+      {/* Score bar */}
       <div style={{ padding: '0.45rem 1.1rem 0', background: T.cardBg }}>
         <div style={{ height: 5, borderRadius: 999, background: T.cardBorder, overflow: 'hidden' }}>
           <div style={{
@@ -876,9 +928,8 @@ function DimensionCard({ res }: { res: IQREvaluation }) {
         </div>
       </div>
 
-      {/* ── 1. Assessment (rationale) — full width, shown first ── */}
+      {/* Assessment */}
       <div style={{
-        background: T.cardBg,
         borderTop: `1px solid ${T.cardBorder}`,
         padding: '0.9rem 1.15rem 0.75rem',
       }}>
@@ -889,78 +940,38 @@ function DimensionCard({ res }: { res: IQREvaluation }) {
           Assessment
         </div>
         <p style={{ color: T.textBody, lineHeight: 1.65, margin: 0, fontSize: '0.95rem' }}>
-          {res.rationale}
+          {res.assessment}
         </p>
       </div>
 
-      {/* ── 2. What you said / Coach's suggestion — side by side ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
-        {/* Left */}
+      {/* Evidence quote */}
+      <div style={{
+        borderTop: `1px solid ${T.cardBorder}`,
+        padding: '0.9rem 1.15rem 0.85rem',
+        background: c.bg,
+        borderLeft: `4px solid ${c.quoteBorder}`,
+      }}>
         <div style={{
-          padding: '1rem 1.15rem', minHeight: '8rem',
-          background: c.bg,
-          borderLeft: `4px solid ${c.quoteBorder}`,
-          borderRight: `1px solid ${T.cardBorder}`,
-          borderTop: `1px solid ${T.cardBorder}`,
+          fontWeight: 800, fontSize: '0.68rem', letterSpacing: '0.07em',
+          textTransform: 'uppercase', color: T.textMuted, marginBottom: '0.55rem',
         }}>
-          <div style={{
-            fontWeight: 800, fontSize: '0.68rem', letterSpacing: '0.07em',
-            textTransform: 'uppercase', color: T.textMuted, marginBottom: '0.55rem',
-          }}>
-            What you said
-          </div>
-          <div style={{
-            fontFamily: "Georgia, 'Times New Roman', serif",
-            fontSize: '0.98rem', color: T.textPrimary, lineHeight: 1.6,
-          }}>
-            &ldquo;{res.evidence.student_quote}&rdquo;
-          </div>
-          <div style={{ marginTop: '0.75rem', fontSize: '0.72rem', color: T.textFaint }}>
-            Turn {res.evidence.turn_id}
-          </div>
+          Evidence
         </div>
-
-        {/* Right */}
         <div style={{
-          padding: '1rem 1.15rem', minHeight: '8rem',
-          background: res.evidence.alternative_phrasing ? c.bg2 : T.cardBg,
-          borderLeft: `1px solid ${res.evidence.alternative_phrasing ? c.quoteBorder : T.cardBorder}`,
-          borderTop: `1px solid ${T.cardBorder}`,
+          fontFamily: "Georgia, 'Times New Roman', serif",
+          fontSize: '0.98rem', color: T.textPrimary, lineHeight: 1.6,
         }}>
-          <div style={{
-            fontWeight: 800, fontSize: '0.68rem', letterSpacing: '0.07em',
-            textTransform: 'uppercase', color: T.textMuted, marginBottom: '0.55rem',
-          }}>
-            Coach&rsquo;s suggestion
-          </div>
-          {res.evidence.alternative_phrasing ? (
-            <div style={{ color: T.textBody, lineHeight: 1.6, fontSize: '0.95rem' }}>
-              {res.evidence.alternative_phrasing}
-            </div>
-          ) : (
-            <div style={{ color: T.textGhost, fontStyle: 'italic', fontSize: '0.9rem' }}>
-              No alternative phrasing for this dimension — often because the evidence highlights a strength, not a closed turn.
-            </div>
-          )}
+          &ldquo;{res.evidence_quote}&rdquo;
         </div>
       </div>
 
-      {/* ── 3. Stakeholder cue + Missed insight ── */}
-      <div style={{
-        background: T.pageBg,
-        borderTop: `1px dashed ${T.divider}`,
-        padding: '1rem 1.15rem 1.15rem',
-      }}>
+      {/* What was missed */}
+      {res.what_was_missed && (
         <div style={{
-          fontWeight: 700, color: T.textMuted, fontSize: '0.78rem', marginBottom: '0.4rem',
+          borderTop: `1px dashed ${T.divider}`,
+          padding: '0.85rem 1.15rem 1rem',
+          background: T.pageBg,
         }}>
-          Stakeholder cue
-        </div>
-        <div style={{ color: T.textBody, lineHeight: 1.55, fontSize: '0.92rem', marginBottom: '0.85rem' }}>
-          {res.evidence.stakeholder_cue}
-        </div>
-
-        {showMissedInsight && missedText && (
           <div style={{
             display: 'flex', gap: 8, alignItems: 'flex-start',
             background: T.amberBg, border: `1px solid ${T.amberBorder}`,
@@ -969,15 +980,15 @@ function DimensionCard({ res }: { res: IQREvaluation }) {
             <AlertTriangle size={14} style={{ color: T.amberDeep, marginTop: 2, flexShrink: 0 }} />
             <div>
               <div style={{ fontWeight: 700, color: T.amberDeep, fontSize: '0.78rem', marginBottom: 2 }}>
-                Missed insight
+                What was missed
               </div>
               <div style={{ color: T.textBody, fontSize: '0.88rem', lineHeight: 1.55 }}>
-                {missedText}
+                {res.what_was_missed}
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1032,18 +1043,16 @@ export default function ScoreReport({ evaluation, onClose }: ScoreReportProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'iqr' | 'sic'>('iqr');
 
-  const results = evaluation.evaluation_results ?? [];
-  const mean    = meanScore(results);
-  const c       = coachColors(mean);
-  const turns     = (evaluation.metadata as any)?.turns as any[] | undefined;
-  const hasSicData = Array.isArray(evaluation.insight_coverage) && evaluation.insight_coverage.length > 0;
+  const overallScore = evaluation.overall_score ?? 0;
+  const c            = coachColors(overallScore);
+  const turns        = (evaluation.metadata as any)?.turns as any[] | undefined;
+  const hasSicData   = Array.isArray(evaluation.insight_coverage) && evaluation.insight_coverage.length > 0;
 
-  // Order dimensions
-  const byName: Record<string, IQREvaluation> = {};
-  for (const r of results) byName[r.dimension_name] = r;
-  const ordered: IQREvaluation[] = [
-    ...DIMENSION_ORDER.filter(d => d in byName).map(d => byName[d]),
-    ...results.filter(r => !DIMENSION_ORDER.includes(r.dimension_name)),
+  // Sort dimensions into canonical display order; append any extras at the end.
+  const dimMap = new Map(evaluation.dimensions.map(d => [d.dimension, d]));
+  const orderedDims: DimensionAssessment[] = [
+    ...DIMENSION_DISPLAY_ORDER.filter(k => dimMap.has(k)).map(k => dimMap.get(k)!),
+    ...evaluation.dimensions.filter(d => !DIMENSION_DISPLAY_ORDER.includes(d.dimension)),
   ];
 
   return (
@@ -1066,7 +1075,7 @@ export default function ScoreReport({ evaluation, onClose }: ScoreReportProps) {
           Back to interview
         </button>
 
-        {/* ── Page title + toggle ── */}
+        {/* ── Page title + tab toggle ── */}
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '1.25rem', gap: '1rem', flexWrap: 'wrap' }}>
           <div>
             <h1 style={{ color: T.textPrimary, fontWeight: 700, fontSize: '1.9rem', margin: '0 0 0.15rem 0' }}>
@@ -1078,8 +1087,6 @@ export default function ScoreReport({ evaluation, onClose }: ScoreReportProps) {
                 : 'Stakeholder Insight Coverage — which knowledge tiers you accessed'}
             </p>
           </div>
-
-          {/* Toggle */}
           <div style={{
             display: 'inline-flex',
             background: T.cardBorder,
@@ -1115,20 +1122,26 @@ export default function ScoreReport({ evaluation, onClose }: ScoreReportProps) {
           </div>
         </div>
 
-        {/* ── Session skill badge ── */}
-        {results.length > 0 && activeTab === 'iqr' && (
+        {/* ── Overall score badge ── */}
+        {orderedDims.length > 0 && activeTab === 'iqr' && (
           <div style={{
             background: `linear-gradient(135deg, ${c.bg} 0%, ${c.bg2} 50%, #ffffff 100%)`,
             border: `1px solid ${T.cardBorder}`,
             borderLeft: `6px solid ${c.border}`,
             borderRadius: 14,
-            padding: '1.5rem 1.75rem',
+            padding: '1.25rem 1.75rem',
             marginBottom: '1.35rem',
             boxShadow: '0 8px 24px rgba(28, 25, 23, 0.08)',
+            display: 'flex', alignItems: 'baseline', gap: '1rem', flexWrap: 'wrap',
           }}>
             <div style={{ fontSize: '2rem', fontWeight: 800, color: c.deep, lineHeight: 1.2, letterSpacing: '-0.02em' }}>
-              {mean.toFixed(1)}/10
+              {overallScore.toFixed(1)}/10
             </div>
+            {evaluation.skill_label && (
+              <div style={{ fontSize: '1.05rem', fontWeight: 600, color: c.accent }}>
+                {evaluation.skill_label}
+              </div>
+            )}
           </div>
         )}
 
@@ -1143,74 +1156,122 @@ export default function ScoreReport({ evaluation, onClose }: ScoreReportProps) {
         {/* ══════════════ IQR TAB ══════════════ */}
         {activeTab === 'iqr' && (
           <>
-            {/* ── Overall summary ── */}
+            {/* ── 1. Coaching strip (first thing the student sees) ── */}
+            {evaluation.top_strip && (
+              <CoachingStrip strip={evaluation.top_strip} />
+            )}
+
+            {/* ── 2. Dimension panels ── */}
+            {orderedDims.length > 0 && (
+              <>
+                <h2 style={{ color: T.textHeading, fontWeight: 600, fontSize: '1.1rem', margin: '0 0 1rem 0' }}>
+                  Dimension diagnostics
+                </h2>
+                {orderedDims.map(d => <DimensionCard key={d.dimension} res={d} />)}
+              </>
+            )}
+
+            {/* ── 3. Overall summary + callouts ── */}
             <div style={{
               background: T.cardBg, border: `1px solid ${T.cardBorder}`,
               borderRadius: 12, padding: '1.25rem',
               boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-              marginBottom: '1.5rem',
+              marginBottom: '1rem',
             }}>
-              <h3 style={{ color: T.textHeading, fontWeight: 600, margin: '0 0 0.75rem 0', fontSize: '1rem' }}>Overall summary</h3>
+              <h3 style={{ color: T.textHeading, fontWeight: 600, margin: '0 0 0.65rem 0', fontSize: '1rem' }}>
+                Overall summary
+              </h3>
               <p style={{ color: T.textMuted, lineHeight: 1.65, fontSize: '0.9rem', margin: 0 }}>
                 {evaluation.overall_summary}
               </p>
             </div>
 
-            {/* ── Dimension diagnostics ── */}
-            <h2 style={{ color: T.textHeading, fontWeight: 600, fontSize: '1.1rem', margin: '0 0 1rem 0' }}>
-              Dimension diagnostics
-            </h2>
-            {ordered.map(res => <DimensionCard key={res.dimension_id} res={res} />)}
+            {/* Depth + earned-vs-volunteered callouts */}
+            {(evaluation.depth_note || evaluation.earned_vs_volunteered_note) && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.35rem' }}>
+                {evaluation.depth_note && (
+                  <div style={{
+                    background: T.cardBg, border: `1px solid ${T.cardBorder}`,
+                    borderRadius: 10, padding: '0.85rem 1rem',
+                  }}>
+                    <div style={{
+                      fontWeight: 800, fontSize: '0.68rem', letterSpacing: '0.07em',
+                      textTransform: 'uppercase', color: T.textMuted, marginBottom: '0.4rem',
+                    }}>
+                      Depth
+                    </div>
+                    <p style={{ margin: 0, color: T.textBody, fontSize: '0.88rem', lineHeight: 1.55 }}>
+                      {evaluation.depth_note}
+                    </p>
+                  </div>
+                )}
+                {evaluation.earned_vs_volunteered_note && (
+                  <div style={{
+                    background: T.cardBg, border: `1px solid ${T.cardBorder}`,
+                    borderRadius: 10, padding: '0.85rem 1rem',
+                  }}>
+                    <div style={{
+                      fontWeight: 800, fontSize: '0.68rem', letterSpacing: '0.07em',
+                      textTransform: 'uppercase', color: T.textMuted, marginBottom: '0.4rem',
+                    }}>
+                      Earned vs. volunteered
+                    </div>
+                    <p style={{ margin: 0, color: T.textBody, fontSize: '0.88rem', lineHeight: 1.55 }}>
+                      {evaluation.earned_vs_volunteered_note}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             <hr style={{ border: 'none', borderTop: `1px solid ${T.cardBorder}`, margin: '0 0 1.25rem 0' }} />
 
             {/* ── Conversation transcript (collapsible) ── */}
             <Collapsible label="Conversation transcript">
-          <p style={{ color: T.textFaint, fontSize: '0.87rem', margin: '0 0 0.75rem 0' }}>
-            Full dialogue from the selected interview.
-          </p>
-          {turns && turns.length > 0 ? turns.map((t: any) => (
-            <div key={t.turn_id} style={{ marginBottom: '0.85rem' }}>
-              <p style={{ color: T.textHeading, fontWeight: 600, margin: '0 0 0.2rem 0', fontSize: '0.88rem' }}>
-                Turn {t.turn_id} — {t.speaker}
+              <p style={{ color: T.textFaint, fontSize: '0.87rem', margin: '0 0 0.75rem 0' }}>
+                Full dialogue from the selected interview.
               </p>
-              <p style={{
-                marginLeft: '0.75rem', padding: '0.6rem 0.85rem',
-                borderLeft: `3px solid ${T.divider}`,
-                background: T.pageBg, borderRadius: '0 8px 8px 0',
-                color: T.textBody, lineHeight: 1.55, fontSize: '0.9rem', margin: '0 0 0 0.75rem',
-              }}>
-                {t.text}
-              </p>
-            </div>
-          )) : (
-            <p style={{ color: T.textFaint, fontSize: '0.88rem' }}>Transcript not available.</p>
-          )}
-        </Collapsible>
+              {turns && turns.length > 0 ? turns.map((t: any) => (
+                <div key={t.turn_id} style={{ marginBottom: '0.85rem' }}>
+                  <p style={{ color: T.textHeading, fontWeight: 600, margin: '0 0 0.2rem 0', fontSize: '0.88rem' }}>
+                    Turn {t.turn_id} — {t.speaker}
+                  </p>
+                  <p style={{
+                    marginLeft: '0.75rem', padding: '0.6rem 0.85rem',
+                    borderLeft: `3px solid ${T.divider}`,
+                    background: T.pageBg, borderRadius: '0 8px 8px 0',
+                    color: T.textBody, lineHeight: 1.55, fontSize: '0.9rem', margin: '0 0 0 0.75rem',
+                  }}>
+                    {t.text}
+                  </p>
+                </div>
+              )) : (
+                <p style={{ color: T.textFaint, fontSize: '0.88rem' }}>Transcript not available.</p>
+              )}
+            </Collapsible>
 
-        {/* ── Glossary (collapsible) ── */}
-        <Collapsible label="Glossary — interview technique terms" icon={<BookOpen size={15} />}>
-          <p style={{ color: T.textFaint, fontSize: '0.87rem', margin: '0 0 0.75rem 0' }}>
-            Definitions for common terms that may appear in coach feedback above.
-          </p>
-          {GLOSSARY.map((entry, i) => (
-            <div key={entry.term} style={{
-              borderTop: i > 0 ? `1px solid ${T.cardBorder}` : 'none',
-              marginTop: i > 0 ? '0.85rem' : 0,
-              paddingTop: i > 0 ? '0.85rem' : 0,
-            }}>
-              <span style={{ fontWeight: 700, color: T.textHeading, fontSize: '0.95rem' }}>
-                {entry.term}
-              </span>
-              <p style={{ color: T.textBody, lineHeight: 1.65, margin: '0.3rem 0 0 0', fontSize: '0.91rem' }}>
-                {entry.definition}
+            {/* ── Glossary (collapsible) ── */}
+            <Collapsible label="Glossary — interview technique terms" icon={<BookOpen size={15} />}>
+              <p style={{ color: T.textFaint, fontSize: '0.87rem', margin: '0 0 0.75rem 0' }}>
+                Definitions for common terms that may appear in coach feedback above.
               </p>
-            </div>
-          ))}
-        </Collapsible>
+              {GLOSSARY.map((entry, i) => (
+                <div key={entry.term} style={{
+                  borderTop: i > 0 ? `1px solid ${T.cardBorder}` : 'none',
+                  marginTop: i > 0 ? '0.85rem' : 0,
+                  paddingTop: i > 0 ? '0.85rem' : 0,
+                }}>
+                  <span style={{ fontWeight: 700, color: T.textHeading, fontSize: '0.95rem' }}>
+                    {entry.term}
+                  </span>
+                  <p style={{ color: T.textBody, lineHeight: 1.65, margin: '0.3rem 0 0 0', fontSize: '0.91rem' }}>
+                    {entry.definition}
+                  </p>
+                </div>
+              ))}
+            </Collapsible>
           </>
         )}
-        {/* ══ end tabs ══ */}
 
       </div>
     </div>
