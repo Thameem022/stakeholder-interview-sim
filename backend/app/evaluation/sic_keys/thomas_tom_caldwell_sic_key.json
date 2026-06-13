@@ -53,6 +53,14 @@
       "why_it_matters": "Tom's deepest knowledge is about how power operates through inaction — how investment decisions made today narrow tomorrow's adaptation options without anyone explicitly choosing that path. Missing this misreads developers as villains and overlooks the structural way the system defers decisions to the market."
     }
   },
+  "strong_interview_motifs": {
+    "summary": "When the student reaches Tier 3 with this persona, name these specific motifs in feedback rather than defaulting to generic 'probe deeper on ethics' language.",
+    "motifs": [
+      "regulatory silence",
+      "path dependency",
+      "capital shaping the future"
+    ]
+  },
   "sic_catalog": [
     {
       "chunk_id": "tom_c_t1_flood_compliance",

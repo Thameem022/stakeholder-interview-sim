@@ -51,6 +51,14 @@
       "why_it_matters": "Sarah holds informal viability thresholds that, once crossed, will silently end the business. Treating her conditional language as uncertainty rather than thresholds will miss the critical insight. Failing to elicit this — and the broader transfer of public risk onto small actors — risks adaptation strategies that succeed technically while quietly hollowing out the downtown."
     }
   },
+  "strong_interview_motifs": {
+    "summary": "When the student reaches Tier 3 with this persona, name these specific motifs in feedback rather than defaulting to generic 'probe deeper on ethics' language.",
+    "motifs": [
+      "viability thresholds",
+      "bounded resilience",
+      "ethical burden of endurance"
+    ]
+  },
   "sic_catalog": [
     {
       "chunk_id": "sarah_d_t1_revenue_sensitivity",

@@ -77,20 +77,20 @@ def _build_session_config(
     # Turn-detection config:
     # - interrupt_response=false in turn-based mode → user audio during the
     #   assistant's turn is ignored by the server (no accidental cancels).
-    # - threshold: VAD activation threshold (0–1). Default 0.5 picks up
-    #   breath, typing, and HVAC. In turn-based mode we raise it to 0.8 so
-    #   only clear speech triggers a user turn. Open-mic stays at 0.5 so
-    #   normal back-and-forth still feels responsive.
-    # - prefix_padding_ms: audio included before VAD trigger, so the first
-    #   syllable isn't clipped.
+    # - threshold: VAD activation threshold (0–1). Open-mic uses 0.65 so
+    #   throat-clearing, breath, and short noise don't trigger false turns;
+    #   turn-based uses 0.8 (mic is normally silenced, only clear speech counts).
+    # - prefix_padding_ms: audio included before VAD trigger so the first
+    #   syllable isn't clipped. Raised to 400 ms to compensate for the higher
+    #   open-mic threshold.
     # - silence_duration_ms: how long of silence before the buffer commits.
     #   700ms in both modes — snappier replies, especially the first one.
     # - create_response=true so user replies still auto-trigger a response —
     #   no buttons.
     turn_detection: Dict[str, Any] = {
         "type": "server_vad",
-        "threshold": 0.8 if turn_based else 0.5,
-        "prefix_padding_ms": 300,
+        "threshold": 0.8 if turn_based else 0.65,
+        "prefix_padding_ms": 400,
         "silence_duration_ms": 700,
         "create_response": True,
         "interrupt_response": not turn_based,

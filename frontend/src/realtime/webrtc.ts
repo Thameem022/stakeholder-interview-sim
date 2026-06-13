@@ -60,6 +60,7 @@ export class RealtimeWebRTCSession {
   private toolArgsBuf: Record<string, string> = {}
   private turnBased = false
   private micMuted = false
+  private lastResponseDoneAt = 0
 
   get analyserNode(): AnalyserNode | null {
     return this.analyser
@@ -203,6 +204,33 @@ export class RealtimeWebRTCSession {
     }
   }
 
+  /**
+   * Polls the AnalyserNode until the remote audio track goes quiet, then waits
+   * a 300 ms tail buffer before resolving. Falls back to a fixed 600 ms delay
+   * if the analyser is unavailable. This prevents unmuting the mic before the
+   * final audio syllable has finished playing.
+   */
+  private waitForAudioDrain(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      if (!this.analyser) {
+        setTimeout(resolve, 600)
+        return
+      }
+      const buf = new Uint8Array(this.analyser.frequencyBinCount)
+      const poll = () => {
+        this.analyser!.getByteTimeDomainData(buf)
+        // Silence = all samples at the 128 midpoint (±4 counts of noise floor).
+        const isQuiet = buf.every((v) => Math.abs(v - 128) < 5)
+        if (isQuiet) {
+          setTimeout(resolve, 300)
+        } else {
+          setTimeout(poll, 50)
+        }
+      }
+      setTimeout(poll, 50)
+    })
+  }
+
   private setupAnalyser(stream: MediaStream, cb: RealtimeCallbacks): void {
     try {
       const ctx = new AudioContext()
@@ -248,6 +276,15 @@ export class RealtimeWebRTCSession {
       case 'conversation.item.input_audio_transcription.completed': {
         const text = String(evt.transcript ?? '').trim()
         if (text) {
+          // Drop Whisper hallucinations: short artifacts ("bye", "uh", etc.)
+          // that arrive within 2 s of the last assistant response ending.
+          // These are typically caused by throat-clearing or breath noise
+          // being mis-transcribed immediately after playback stops.
+          const isHallucination =
+            text.length <= 6 &&
+            /^(bye-bye|bye|thanks?|thank you|you|uh|um)\.?$/i.test(text) &&
+            Date.now() - this.lastResponseDoneAt < 2000
+          if (isHallucination) break
           cb.onUserTranscript?.(text)
           if (this.sessionId) {
             void postTranscript(this.sessionId, 'user', text).catch(() => {})
@@ -280,15 +317,33 @@ export class RealtimeWebRTCSession {
         break
       }
 
-      case 'response.done':
-      case 'response.cancelled': {
+      case 'response.done': {
         const final = this.assistantBuf.trim()
-        if (final && t === 'response.done') {
+        this.assistantBuf = ''
+        this.lastResponseDoneAt = Date.now()
+        if (final) {
           cb.onAssistantDone?.(final)
           if (this.sessionId) {
             void postTranscript(this.sessionId, 'assistant', final).catch(() => {})
           }
         }
+        if (this.turnBased) {
+          // response.done fires when the model finishes generating, not when the
+          // user finishes hearing. Wait for the audio playback queue to drain
+          // (detected via the AnalyserNode) + a 300 ms tail buffer before
+          // unmuting so the final syllable isn't clipped by the next VAD window.
+          void this.waitForAudioDrain().then(() => {
+            cb.onAssistantSpeakingChange?.(false)
+            void this.unmuteMic()
+          })
+        } else {
+          cb.onAssistantSpeakingChange?.(false)
+        }
+        break
+      }
+
+      case 'response.cancelled': {
+        // Barge-in path — unmute immediately so the user can speak.
         this.assistantBuf = ''
         if (this.turnBased) void this.unmuteMic()
         cb.onAssistantSpeakingChange?.(false)
