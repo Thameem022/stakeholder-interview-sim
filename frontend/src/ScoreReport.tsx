@@ -9,7 +9,6 @@ import {
   HeartHandshake,
   AlertTriangle,
   ArrowLeft,
-  BookOpen,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -196,43 +195,6 @@ const DIMENSION_EMOJI: Record<DimensionName, string> = {
   probing_and_follow_up_depth:              '🔍',
   listening_interpretation_and_stewardship: '👂',
 };
-
-// ---------------------------------------------------------------------------
-// Glossary
-// ---------------------------------------------------------------------------
-
-const GLOSSARY = [
-  {
-    term: 'Leading question',
-    definition:
-      "A question that subtly steers the respondent toward a particular answer by embedding an assumption or preferred outcome (e.g., 'You were satisfied with the process, weren't you?'). Leading questions bias the data and should be replaced with neutral, open-ended alternatives.",
-  },
-  {
-    term: 'Double-barreled question',
-    definition:
-      "A single question that asks about two separate issues at once (e.g., 'Was the process clear and did you feel supported?'). The respondent cannot answer both parts accurately in one reply; split them into two distinct questions.",
-  },
-  {
-    term: 'Closed question',
-    definition:
-      "A question that invites only a yes/no or single-word answer, limiting the information gathered (e.g., 'Did you attend the meeting?'). Use closed questions sparingly—mainly to confirm facts.",
-  },
-  {
-    term: 'Open-ended question',
-    definition:
-      "A question that invites the respondent to elaborate freely (e.g., 'Can you walk me through what happened?'). Open-ended questions are the primary tool for uncovering context, reasoning, and detail.",
-  },
-  {
-    term: 'Probing question',
-    definition:
-      "A follow-up question that digs deeper into a previous response to surface root causes, nuance, or unstated assumptions (e.g., 'What led you to that conclusion?'). Effective probing distinguishes strong interviewers from those who merely collect facts.",
-  },
-  {
-    term: 'Rapport-building',
-    definition:
-      'Techniques used to establish trust and psychological safety with the interviewee—such as acknowledging responses, using the person\'s name, or briefly normalising difficult topics—so that they feel comfortable sharing openly.',
-  },
-];
 
 // ── Status colour tokens ──
 // `not_accessed_insufficient_framing` is the developmental gray.
@@ -574,7 +536,7 @@ function CueHeatmap({ tiers }: { tiers: TierCoverage[] }) {
               fontSize: '0.88rem', color: T.textBody, lineHeight: 1.55,
             }}>
               <span style={{ fontWeight: 700, color: '#475569' }}>In-character restraint: </span>
-              Alex maintained appropriate institutional restraint here. Your framing was respectful — this is not a missed quota.
+              The stakeholder maintained appropriate professional restraint here. Your framing was respectful — this is not a missed quota.
             </div>
           )}
           {isFramingGap && isSignal && !!sel.surfacing_cues_missing?.length && (
@@ -801,7 +763,12 @@ function InsightCoveragePanel({ tiers }: { tiers: TierCoverage[] }) {
 // CoachingStrip — first thing the student sees in the IQR tab
 // ---------------------------------------------------------------------------
 
-function CoachingStrip({ strip }: { strip: TopStrip }) {
+function CoachingStrip({ strip, overallScore }: { strip: TopStrip; overallScore: number }) {
+  const isExtension = overallScore >= 8;
+  const middleLabel = isExtension ? 'Extend' : 'Missed';
+  const middleBg = isExtension ? T.greenBg : T.amberBg;
+  const middleBorder = isExtension ? T.greenBorder : T.amberBorder;
+  const middleAccent = isExtension ? T.greenDeep : T.amberDeep;
   return (
     <div style={{
       background: T.cardBg,
@@ -817,7 +784,7 @@ function CoachingStrip({ strip }: { strip: TopStrip }) {
         background: '#f5f5f4',
       }}>
         <span style={{ fontWeight: 700, fontSize: '0.95rem', color: T.textHeading }}>
-          Coaching Summary
+          Interview Process Summary
         </span>
       </div>
       <div style={{ padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
@@ -840,21 +807,21 @@ function CoachingStrip({ strip }: { strip: TopStrip }) {
             {strip.strength}
           </span>
         </div>
-        {/* Missed opportunities — amber */}
+        {/* Missed opportunities — amber by default, green "Extend" at score ≥ 8 */}
         {strip.missed_opportunities.map((opp, i) => (
           <div key={i} style={{
-            background: T.amberBg,
-            border: `1px solid ${T.amberBorder}`,
+            background: middleBg,
+            border: `1px solid ${middleBorder}`,
             borderRadius: 10,
             padding: '0.7rem 1rem',
             display: 'flex', alignItems: 'flex-start', gap: 10,
           }}>
             <span style={{
-              fontWeight: 700, color: T.amberDeep, fontSize: '0.72rem',
+              fontWeight: 700, color: middleAccent, fontSize: '0.72rem',
               textTransform: 'uppercase', letterSpacing: '0.07em',
               flexShrink: 0, marginTop: 3, minWidth: 60,
             }}>
-              Missed
+              {middleLabel}
             </span>
             <span style={{ color: T.textBody, fontSize: '0.93rem', lineHeight: 1.55 }}>{opp}</span>
           </div>
@@ -965,30 +932,37 @@ function DimensionCard({ res }: { res: DimensionAssessment }) {
         </div>
       </div>
 
-      {/* What was missed */}
-      {res.what_was_missed && (
-        <div style={{
-          borderTop: `1px dashed ${T.divider}`,
-          padding: '0.85rem 1.15rem 1rem',
-          background: T.pageBg,
-        }}>
+      {/* What was missed / Go further — extension framing kicks in at score ≥ 8 */}
+      {res.what_was_missed && (() => {
+        const isExtension = score >= 8;
+        const bg = isExtension ? T.greenBg : T.amberBg;
+        const border = isExtension ? T.greenBorder : T.amberBorder;
+        const accent = isExtension ? T.greenDeep : T.amberDeep;
+        const label = isExtension ? 'Go further' : 'What was missed';
+        return (
           <div style={{
-            display: 'flex', gap: 8, alignItems: 'flex-start',
-            background: T.amberBg, border: `1px solid ${T.amberBorder}`,
-            borderRadius: 8, padding: '0.6rem 0.85rem',
+            borderTop: `1px dashed ${T.divider}`,
+            padding: '0.85rem 1.15rem 1rem',
+            background: T.pageBg,
           }}>
-            <AlertTriangle size={14} style={{ color: T.amberDeep, marginTop: 2, flexShrink: 0 }} />
-            <div>
-              <div style={{ fontWeight: 700, color: T.amberDeep, fontSize: '0.78rem', marginBottom: 2 }}>
-                What was missed
-              </div>
-              <div style={{ color: T.textBody, fontSize: '0.88rem', lineHeight: 1.55 }}>
-                {res.what_was_missed}
+            <div style={{
+              display: 'flex', gap: 8, alignItems: 'flex-start',
+              background: bg, border: `1px solid ${border}`,
+              borderRadius: 8, padding: '0.6rem 0.85rem',
+            }}>
+              <AlertTriangle size={14} style={{ color: accent, marginTop: 2, flexShrink: 0 }} />
+              <div>
+                <div style={{ fontWeight: 700, color: accent, fontSize: '0.78rem', marginBottom: 2 }}>
+                  {label}
+                </div>
+                <div style={{ color: T.textBody, fontSize: '0.88rem', lineHeight: 1.55 }}>
+                  {res.what_was_missed}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
@@ -1083,8 +1057,8 @@ export default function ScoreReport({ evaluation, onClose }: ScoreReportProps) {
             </h1>
             <p style={{ color: T.textMuted, fontSize: '1rem', margin: 0 }}>
               {activeTab === 'iqr'
-                ? 'Interview Quality Rubric — feedback for your next session'
-                : 'Stakeholder Insight Coverage — which knowledge tiers you accessed'}
+                ? 'Interview process — feedback for your next session'
+                : 'Content coverage — which knowledge tiers you accessed'}
             </p>
           </div>
           <div style={{
@@ -1142,6 +1116,16 @@ export default function ScoreReport({ evaluation, onClose }: ScoreReportProps) {
                 {evaluation.skill_label}
               </div>
             )}
+            <div style={{
+              flexBasis: '100%',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              color: T.textFaint,
+              marginTop: '0.35rem',
+              letterSpacing: '0.01em',
+            }}>
+              Interview process score · doesn't include content coverage (SIC)
+            </div>
           </div>
         )}
 
@@ -1158,7 +1142,7 @@ export default function ScoreReport({ evaluation, onClose }: ScoreReportProps) {
           <>
             {/* ── 1. Coaching strip (first thing the student sees) ── */}
             {evaluation.top_strip && (
-              <CoachingStrip strip={evaluation.top_strip} />
+              <CoachingStrip strip={evaluation.top_strip} overallScore={overallScore} />
             )}
 
             {/* ── 2. Dimension panels ── */}
@@ -1250,26 +1234,6 @@ export default function ScoreReport({ evaluation, onClose }: ScoreReportProps) {
               )}
             </Collapsible>
 
-            {/* ── Glossary (collapsible) ── */}
-            <Collapsible label="Glossary — interview technique terms" icon={<BookOpen size={15} />}>
-              <p style={{ color: T.textFaint, fontSize: '0.87rem', margin: '0 0 0.75rem 0' }}>
-                Definitions for common terms that may appear in coach feedback above.
-              </p>
-              {GLOSSARY.map((entry, i) => (
-                <div key={entry.term} style={{
-                  borderTop: i > 0 ? `1px solid ${T.cardBorder}` : 'none',
-                  marginTop: i > 0 ? '0.85rem' : 0,
-                  paddingTop: i > 0 ? '0.85rem' : 0,
-                }}>
-                  <span style={{ fontWeight: 700, color: T.textHeading, fontSize: '0.95rem' }}>
-                    {entry.term}
-                  </span>
-                  <p style={{ color: T.textBody, lineHeight: 1.65, margin: '0.3rem 0 0 0', fontSize: '0.91rem' }}>
-                    {entry.definition}
-                  </p>
-                </div>
-              ))}
-            </Collapsible>
           </>
         )}
 

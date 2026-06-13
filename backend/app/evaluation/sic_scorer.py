@@ -13,7 +13,9 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 SIC_KEYS_DIR = Path(__file__).parent / "sic_keys"
-DEFAULT_SIC_PROMPT_PATH = Path(__file__).parent / "prompts" / "sic_system_prompt.txt"
+# Versioned evaluator prompt — bump version here to upgrade. v1 lives at
+# prompts/sic_system_prompt.txt (unversioned legacy location).
+DEFAULT_SIC_PROMPT_PATH = Path(__file__).parent / "prompts" / "sic" / "v2" / "system_prompt.txt"
 
 
 # ── Structured output schemas ────────────────────────────────────────────────
@@ -112,7 +114,11 @@ def _compute_status_for_tier(
     if tier_num == 3:
         weighted = 0.0
         for v in item_views:
-            if v.get("elicited"):
+            # earned_mode gate: only count items the student actually earned.
+            # Volunteered content does not pass — even if the grader marked
+            # it elicited, deterministic gating here prevents inflated coverage
+            # when the persona spilled the content unprompted.
+            if v.get("elicited") and v.get("earned_mode") == "earned":
                 mode = v.get("credit_mode") or "indirect_acknowledgment"
                 weighted += _TIER3_CREDIT_WEIGHT.get(mode, 0.5)
         pct = round((weighted / total) * 100, 1)
@@ -133,8 +139,12 @@ def _compute_status_for_tier(
             return "partial", pct, "Proficient"
         return "full", pct, None
 
-    # Tier 1/2: binary count
-    found = sum(1 for v in item_views if v.get("elicited"))
+    # Tier 1/2: binary count. earned_mode gate applied here so volunteered
+    # content does not count as access (item 2 fix).
+    found = sum(
+        1 for v in item_views
+        if v.get("elicited") and v.get("earned_mode") == "earned"
+    )
     pct = round((found / total) * 100, 1)
     if pct == 0:
         return "not_accessed_insufficient_framing", 0.0, None
@@ -467,7 +477,7 @@ class SICScorer:
             if status == "full":
                 quick_win = "You captured this tier well!"
             elif status == "not_accessed_appropriate_restraint":
-                quick_win = "Mature framing — you respected Alex's institutional restraint"
+                quick_win = "Mature framing — you respected the stakeholder's professional restraint"
 
             coverage: dict = {
                 "tier": tier_num,

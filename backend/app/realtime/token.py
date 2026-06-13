@@ -84,14 +84,17 @@ def _build_session_config(
     #   syllable isn't clipped. Raised to 400 ms to compensate for the higher
     #   open-mic threshold.
     # - silence_duration_ms: how long of silence before the buffer commits.
-    #   700ms in both modes — snappier replies, especially the first one.
+    #   2000ms — full 2-second turn-completion buffer so the persona does not
+    #   begin responding until the interviewer has clearly finished speaking.
+    #   This eliminates the early-turn-order artifact where the persona answered
+    #   mid-utterance during a natural pause in a long opening (item 9).
     # - create_response=true so user replies still auto-trigger a response —
     #   no buttons.
     turn_detection: Dict[str, Any] = {
         "type": "server_vad",
-        "threshold": 0.8 if turn_based else 0.65,
+        "threshold": 0.95 if turn_based else 0.85,
         "prefix_padding_ms": 400,
-        "silence_duration_ms": 700,
+        "silence_duration_ms": 1500,
         "create_response": True,
         "interrupt_response": not turn_based,
     }
@@ -110,6 +113,10 @@ def _build_session_config(
             "output": {
                 "format": {"type": "audio/pcm", "rate": 24000},
                 "voice": voice_id,
+                # ~20% slower than default. Realtime API supports 0.25–1.5;
+                # applied between turns, not mid-response. Gives students a bit
+                # more processing time on dense answers (item 7).
+                "speed": 0.9,
             },
         },
         "tools": [RETRIEVE_TOOL],
