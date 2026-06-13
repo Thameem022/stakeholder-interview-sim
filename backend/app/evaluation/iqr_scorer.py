@@ -1,45 +1,66 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
-from app.evaluation.iqr_schema import SessionEvaluation, Transcript
+from app.evaluation.iqr_schema import SessionEvaluation, TopStrip, Transcript
+from app.personas.prompt_assembly import _load_persona_config
 
-IQR_RUBRIC_METADATA: Dict[str, Any] = {
-    "iqr_score_scale": "10-point",
-    "iqr_score_min": 1.0,
-    "iqr_score_max": 10.0,
-    "iqr_skill_bands": (
-        "6.0–6.9 Novice Fact-Finder; 7.0–7.9 Emerging Technical Interviewer; "
-        "8.0–8.9 Competent Operational Interviewer; 9.0–9.9 Advanced Systems "
-        "Interviewer; 10.0 Master Stakeholder Partner"
-    ),
-}
+# Default prompt path — evaluator system prompts (versioned; bump version here to upgrade)
+DEFAULT_PROMPT_PATH = Path(__file__).parent / "prompts" / "iqr" / "v1" / "system_prompt.txt"
+SIC_KEYS_DIR = Path(__file__).parent / "sic_keys"
 
-IQR_SKILL_SCALE_CONTEXT = """\
-**10-point mapping (apply per dimension):**
-- Set `score` to a float in [1.0, 10.0] (half steps allowed, e.g. 6.5).
-- Set `skill_level_title` to the **exact quoted title** from Phase 1 whose band contains that score (e.g. 7.4 → "Emerging Technical Interviewer").
-- For scores **below 6.0**, choose the closest Phase 1 title by meaning and say so in `rationale`, or use a concise developmental label that fits the band (e.g. approaching "Novice Fact-Finder").
-- **Closed-turn rule:** If Phase 2 identifies a "Closed Turn" for evidence tied to a dimension, you **must** populate `evidence.alternative_phrasing` (the Bridge) and `line_of_inquiry_impact` (the lost line of inquiry). If there is no closed turn for that dimension's evidence, set both fields to `null`.
 
-**ANTI-COMPRESSION DIRECTIVE — applies to every dimension:**
-- Do NOT default to the 6.0–7.9 middle band when uncertain. Middle scores must be earned by observable behaviors in that band.
-- A dimension where the student exhibited ≥2 leading/closed/double-barreled questions and no paraphrase MUST score ≤ 4.5 for that dimension. No exceptions.
-- A dimension where the student exhibited ≥3 genuine open-ended probes, ≥1 paraphrase/summary, and neutral framing throughout SHOULD score ≥ 8.0 for that dimension.
-- It is correct and expected for the five dimensions to span 3+ points (e.g., Question Formulation 7.5 while Ethical Conduct is 3.5). Uneven performance is the norm. Regressing all five dimensions to the same band is a calibration failure.
-- Before finalizing each score, ask yourself: "Which OBSERVABLE behaviors in Phase 1 justify this band?" If you cannot name 2+ behaviors from the assigned band that are present in the transcript, drop the score by one band.
-"""
+def _load_rapport_anchors_block(persona_id: str) -> str:
+    """Build the PERSONA-SPECIFIC RAPPORT ANCHORS block for the IQR chain, or '' if absent."""
+    if not persona_id:
+        return ""
+    try:
+        config = _load_persona_config(persona_id)
+    except Exception:
+        return ""
+    anchors = config.get("iqr_rapport_anchors")
+    if not anchors:
+        logger.warning("iqr_rapport_anchors missing from persona config for '%s' — rapport scoring will use generic rules only", persona_id)
+        return ""
+    lines = [
+        "PERSONA-SPECIFIC RAPPORT ANCHORS (apply when scoring Framing & Stakeholder Fit):",
+        f"  Summary: {anchors.get('summary', '')}",
+        "  High-score behaviors (count these as evidence of rapport):",
+    ]
+    for b in anchors.get("high_score_behaviors", []):
+        lines.append(f"    - {b}")
+    lines.append("  Low-score behaviors (count these against rapport):")
+    for b in anchors.get("low_score_behaviors", []):
+        lines.append(f"    - {b}")
+    lines.append("  DO NOT credit these as rapport:")
+    for b in anchors.get("explicit_non_rewards", []):
+        lines.append(f"    - {b}")
+    return "\n".join(lines)
 
-# Default prompt path — evaluator system prompts
-DEFAULT_PROMPT_PATH = Path(__file__).parent / "prompts" / "iqr_system_prompt.txt"
+
+def _load_strong_interview_motifs(persona_id: str) -> list[str]:
+    """Return the strong_interview_motifs.motifs list for the persona, or [] if absent."""
+    if not persona_id:
+        return []
+    key_path = SIC_KEYS_DIR / f"{persona_id}_sic_key.json"
+    if not key_path.is_file():
+        return []
+    try:
+        data = json.loads(key_path.read_text(encoding="utf-8"))
+        return list(data.get("strong_interview_motifs", {}).get("motifs", []))
+    except Exception:
+        return []
 
 
 def _build_llm() -> BaseChatModel:
@@ -71,7 +92,7 @@ class IQRScorer:
             [
                 (
                     "system",
-                    "{system_prompt}\n\n{rubric_context}\n\n{format_instructions}",
+                    "{system_prompt}\n\n{persona_rapport_anchors}\n\n{motifs_context}\n\n{format_instructions}",
                 ),
                 (
                     "user",
@@ -87,12 +108,21 @@ class IQRScorer:
 
     async def evaluate(self, transcript: Transcript) -> SessionEvaluation:
         if not transcript.turns:
-            base_metadata = {**dict(transcript.metadata or {}), **IQR_RUBRIC_METADATA}
+            base_metadata = dict(transcript.metadata or {})
             base_metadata["status"] = "Incomplete"
             return SessionEvaluation(
                 metadata=base_metadata,
-                evaluation_results=[],
+                dimensions=[],
+                overall_score=1.0,
+                skill_label="Incomplete",
                 overall_summary="Transcript is empty; no IQR evaluation was performed.",
+                depth_note="No depth could be assessed — transcript is empty.",
+                earned_vs_volunteered_note="No insight was exchanged.",
+                top_strip=TopStrip(
+                    strength="N/A — no interview to evaluate.",
+                    missed_opportunities=["Complete an interview to receive coaching feedback."],
+                    next_move="Begin an interview and complete at least a few turns.",
+                ),
             )
 
         base_metadata = dict(transcript.metadata or {})
@@ -101,9 +131,22 @@ class IQRScorer:
 
         transcript_json = json.dumps(transcript.model_dump(), ensure_ascii=False, indent=2)
 
+        persona_id: str = str(base_metadata.get("persona_key") or base_metadata.get("persona_id") or "")
+        motifs = _load_strong_interview_motifs(persona_id)
+        if motifs:
+            motifs_context = (
+                "STRONG INTERVIEW MOTIFS — use these in overall_summary when score ≥ 8.0:\n"
+                + "\n".join(f"  - {m}" for m in motifs)
+            )
+        else:
+            motifs_context = ""
+
+        persona_rapport_anchors = _load_rapport_anchors_block(persona_id)
+
         chain_input = {
             "system_prompt": self._system_prompt,
-            "rubric_context": IQR_SKILL_SCALE_CONTEXT,
+            "persona_rapport_anchors": persona_rapport_anchors,
+            "motifs_context": motifs_context,
             "format_instructions": self._parser.get_format_instructions(),
             "transcript_json": transcript_json,
         }
@@ -120,11 +163,7 @@ class IQRScorer:
             fallback_chain = self._build_chain(fallback_llm)
             result = await fallback_chain.ainvoke(chain_input)
 
-        result.metadata = {
-            **base_metadata,
-            **result.metadata,
-            **IQR_RUBRIC_METADATA,
-        }
+        result.metadata = {**base_metadata, **result.metadata}
         return result
 
 

@@ -47,6 +47,14 @@
       "why_it_matters": "The deepest insight here lives in how the planner navigates ambiguity — what cannot be protected indefinitely, how 'voluntary' carries pressure, and the absence of thresholds for shifting strategies. These signals surface only through reflective framing; pressing for facts shuts them down."
     }
   },
+  "strong_interview_motifs": {
+    "summary": "When the student reaches Tier 3 with this persona, name these specific motifs in feedback rather than defaulting to generic 'probe deeper on ethics' language.",
+    "motifs": [
+      "thresholds",
+      "transition planning",
+      "path-shaping incremental decisions"
+    ]
+  },
   "sic_catalog": [
     {
       "chunk_id": "alex_m_t1_climate_baseline",
