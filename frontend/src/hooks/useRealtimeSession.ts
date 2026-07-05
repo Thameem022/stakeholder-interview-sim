@@ -6,7 +6,6 @@ export type SessionStatus = 'idle' | 'connecting' | 'live' | 'ending'
 export interface UseRealtimeSessionOptions {
   personaId: string
   voiceId?: string
-  turnBased?: boolean
 }
 
 export interface RealtimeSession {
@@ -69,7 +68,6 @@ export function useRealtimeSession(opts: UseRealtimeSessionOptions): RealtimeSes
       await sess.connect({
         personaId: opts.personaId,
         voiceId: opts.voiceId,
-        turnBased: opts.turnBased,
         callbacks: {
           onSessionReady: (sid) => setSessionId(sid),
           onUserTranscript: (text) => setUserTranscript(text),
@@ -88,7 +86,7 @@ export function useRealtimeSession(opts: UseRealtimeSessionOptions): RealtimeSes
       cleanup()
       setStatus('idle')
     }
-  }, [status, opts.personaId, opts.voiceId, opts.turnBased, cleanup])
+  }, [status, opts.personaId, opts.voiceId, cleanup])
 
   return {
     status,

@@ -24,21 +24,21 @@ export interface RealtimeCallbacks {
 export interface ConnectOptions {
   personaId: string
   voiceId?: string
-  /**
-   * If true, the local mic is fully silenced for the duration of every
-   * assistant response — from `response.created` (before any audio arrives)
-   * through `response.done`. We both:
-   *   - set `track.enabled = false`, AND
-   *   - call `sender.replaceTrack(null)` so the WebRTC sender transmits
-   *     literally nothing (not even silence packets) to the server.
-   * This is what prevents OpenAI's server VAD from ever seeing user audio
-   * during a response, so the persona can't be interrupted by playback
-   * bleed, background noise, or the user starting to talk too early.
-   * Server VAD is still on for user turns, so replies auto-commit — no buttons.
-   */
-  turnBased?: boolean
   callbacks: RealtimeCallbacks
 }
+
+/**
+ * No-barge-in mic gating: the local mic is fully silenced for the duration of
+ * every assistant response — from `response.created` (before any audio
+ * arrives) through `response.done`. We both:
+ *   - set `track.enabled = false`, AND
+ *   - call `sender.replaceTrack(null)` so the WebRTC sender transmits
+ *     literally nothing (not even silence packets) to the server.
+ * This is what prevents OpenAI's server VAD from ever seeing user audio
+ * during a response, so the persona can't be interrupted by playback
+ * bleed, background noise, or the user starting to talk too early.
+ * Server VAD is still on for user turns, so replies auto-commit — no buttons.
+ */
 
 // GA Realtime WebRTC SDP exchange endpoint. The /v1/realtime URL (no /calls
 // suffix) is the deprecated Beta shape and returns 400 with
@@ -58,7 +58,6 @@ export class RealtimeWebRTCSession {
   private personaId = ''
   private assistantBuf = ''
   private toolArgsBuf: Record<string, string> = {}
-  private turnBased = false
   private micMuted = false
   private lastResponseDoneAt = 0
 
@@ -72,13 +71,10 @@ export class RealtimeWebRTCSession {
 
   async connect(opts: ConnectOptions): Promise<void> {
     this.personaId = opts.personaId
-    this.turnBased = !!opts.turnBased
 
     const { ephemeral_key, session_id, model } = await getRealtimeToken(
       opts.personaId,
-      opts.voiceId,
-      undefined,
-      this.turnBased
+      opts.voiceId
     )
     this.sessionId = session_id
     opts.callbacks.onSessionReady?.(session_id)
@@ -296,7 +292,7 @@ export class RealtimeWebRTCSession {
       case 'response.created': {
         // Earliest possible mute point — fires before audio_transcript.delta
         // and audio.delta, so the user has no window to interrupt mid-response.
-        if (this.turnBased) void this.muteMic()
+        void this.muteMic()
         break
       }
 
@@ -312,7 +308,7 @@ export class RealtimeWebRTCSession {
       case 'response.audio.delta': {
         // Redundant with response.created above, but kept as a safety net in
         // case response.created is skipped or muteMic() races.
-        if (this.turnBased) void this.muteMic()
+        void this.muteMic()
         cb.onAssistantSpeakingChange?.(true)
         break
       }
@@ -327,25 +323,21 @@ export class RealtimeWebRTCSession {
             void postTranscript(this.sessionId, 'assistant', final).catch(() => {})
           }
         }
-        if (this.turnBased) {
-          // response.done fires when the model finishes generating, not when the
-          // user finishes hearing. Wait for the audio playback queue to drain
-          // (detected via the AnalyserNode) + a 300 ms tail buffer before
-          // unmuting so the final syllable isn't clipped by the next VAD window.
-          void this.waitForAudioDrain().then(() => {
-            cb.onAssistantSpeakingChange?.(false)
-            void this.unmuteMic()
-          })
-        } else {
+        // response.done fires when the model finishes generating, not when the
+        // user finishes hearing. Wait for the audio playback queue to drain
+        // (detected via the AnalyserNode) + a 300 ms tail buffer before
+        // unmuting so the final syllable isn't clipped by the next VAD window.
+        void this.waitForAudioDrain().then(() => {
           cb.onAssistantSpeakingChange?.(false)
-        }
+          void this.unmuteMic()
+        })
         break
       }
 
       case 'response.cancelled': {
-        // Barge-in path — unmute immediately so the user can speak.
+        // Cancellation path — unmute immediately so the user can speak.
         this.assistantBuf = ''
-        if (this.turnBased) void this.unmuteMic()
+        void this.unmuteMic()
         cb.onAssistantSpeakingChange?.(false)
         break
       }

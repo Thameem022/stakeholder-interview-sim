@@ -54,14 +54,12 @@ export interface RealtimeToken {
 export const getRealtimeToken = async (
   personaId: string,
   voiceId?: string,
-  sessionId?: string,
-  turnBased?: boolean
+  sessionId?: string
 ): Promise<RealtimeToken> => {
   const { data } = await apiClient.post('/api/realtime/token', {
     persona_id: personaId,
     voice_id: voiceId,
     session_id: sessionId,
-    turn_based: !!turnBased,
   })
   return data
 }
