@@ -31,24 +31,28 @@
       "translating_operational_language_into_decision_insight"
     ]
   },
+  "grading_rules": {
+    "tier_2_requires_gate": true,
+    "tier_2_gate_rationale": "Sarah naturally describes operational and contextual reality in response to broad questions. To distinguish students who actually probe from students who simply triggered Sarah's natural disclosure, Tier 2 items also require a targeted student question or framing move that names the topic before the persona's mention."
+  },
   "tier_metadata": {
     "1": {
       "title": "Operational and Experiential Knowledge",
       "category": "Operational",
       "description": "Surfaces through straightforward, respectful questioning — revenue sensitivity, perception fragility, operational complexity, and the primacy of predictability over protection",
-      "why_it_matters": "Sarah's operational reality is how climate risk lands on the local economy day by day. This baseline grounds adaptation discussions in economic immediacy and establishes business vulnerability as structural, not managerial failure. Almost every student will capture Tier 1 — but Tier 1 alone is only the surface."
+      "why_it_matters": "This is how climate risk lands on the local economy day by day. If you don't ground your adaptation plan in this operational reality, you'll design solutions that look reasonable on paper but ignore how a small business actually survives a closure week. Almost every interviewer captures this — on its own, it only gives you the surface."
     },
     "2": {
       "title": "Informal Prioritization, Timing, and System Interaction",
       "category": "Contextual",
       "description": "Surfaces when students probe how disruption interacts with systems beyond the storefront — cleanup-vs-prevention, planning-vs-business timelines, private cost absorption, and employee vulnerability",
-      "why_it_matters": "These timing and burden patterns reveal the structural mismatch between how the city responds and how businesses survive. Students must connect business description to governance structure — listening to timing as a form of equity. Gaps here produce plans that small businesses cannot live with."
+      "why_it_matters": "These timing and burden patterns are where adaptation plans usually fail small businesses. If you miss the mismatch between five-year planning cycles and one-season survival, your recommendations will be technically sound and practically unusable. Listening to timing here is part of equity work."
     },
     "3": {
       "title": "Thresholds, Ethical Trade-Offs, and Fragility",
       "category": "Strategic",
       "description": "Emerges through conditional language and threshold statements — informal viability thresholds, quiet consideration of exit, ethical discomfort with resilience framing, and uneven adaptive capacity. Sarah's conditionals ('as long as,' 'depends how often') are threshold markers, not hedging.",
-      "why_it_matters": "Sarah holds informal viability thresholds that, once crossed, will silently end the business. Treating her conditional language as uncertainty rather than thresholds will miss the critical insight. Failing to elicit this — and the broader transfer of public risk onto small actors — risks adaptation strategies that succeed technically while quietly hollowing out the downtown."
+      "why_it_matters": "Sarah holds informal viability thresholds that, once crossed, will quietly end the business. If you treat her conditional language as hedging instead of as thresholds — or if you skip the broader transfer of public risk onto small actors — your adaptation strategy can succeed technically while hollowing out the downtown you were trying to protect."
     }
   },
   "strong_interview_motifs": {
