@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from typing import Any
 from uuid import UUID
 
@@ -13,6 +14,33 @@ from app.db import get_pool
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# Whisper / turn-splitting artifacts that arrive as isolated short turns.
+# Matched against the trimmed turn text — only drops the turn if the WHOLE
+# text is a single artifact token. A turn like "Bye, that was helpful" keeps
+# the substantive content (the comma-and-rest stops the regex from matching).
+_ARTIFACT_RE = re.compile(
+    r"^(bye[-\s]?bye|bye|thanks?|thank you|uh|um|you|hmm|mhm)\.?$",
+    re.IGNORECASE,
+)
+
+
+def sanitize_transcript(turns: list[dict]) -> list[dict]:
+    """Drop isolated speech-to-text artifacts before scoring (item 11).
+
+    Conservative: only removes a turn whose trimmed text matches a single
+    artifact token. Any turn containing real content is preserved. Applied
+    once before both IQR and SIC see the transcript so noise doesn't
+    suppress otherwise strong scores.
+    """
+    cleaned: list[dict] = []
+    for t in turns:
+        text = (t.get("text") or "").strip()
+        if text and _ARTIFACT_RE.match(text):
+            continue
+        cleaned.append(t)
+    return cleaned
 
 
 SCORER_METADATA = {
@@ -75,6 +103,9 @@ async def eval_iqr(session_id: UUID):
 
     session = await _load_session(session_id)
     turns = _parse_transcript(session["transcript"])
+    # Strip whisper/turn-splitting artifacts before scoring so noise can't
+    # depress IQR/SIC results (item 11).
+    turns = sanitize_transcript(turns)
     meta = _parse_metadata(session["metadata"])
     persona_id = session["persona_id"]
 
@@ -127,7 +158,7 @@ async def eval_sic(session_id: UUID):
     from app.evaluation.sic_scorer import SICScorer
 
     session = await _load_session(session_id)
-    turns = _parse_transcript(session["transcript"])
+    turns = sanitize_transcript(_parse_transcript(session["transcript"]))
 
     scorer = SICScorer()
     result = await scorer.evaluate(session["persona_id"], turns)

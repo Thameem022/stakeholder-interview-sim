@@ -87,10 +87,17 @@ def _load_persona_prompt_bundle(persona_key: str) -> Optional[Dict[str, str]]:
         return None
 
     prompt_dir = Path(prompt_dir_value)
+    # Prefer versioned *_v2.txt files when present; fall back to v1 names.
+    system_file = prompt_dir / "system_prompt_v2.txt"
+    if not system_file.is_file():
+        system_file = prompt_dir / "system_prompt.txt"
+    behavior_file = prompt_dir / "behavior_prompt_v2.txt"
+    if not behavior_file.is_file():
+        behavior_file = prompt_dir / "behavior_prompt.txt"
     try:
         bundle = {
-            "system_prompt": (prompt_dir / "system_prompt.txt").read_text(encoding="utf-8").strip(),
-            "behavior_prompt": (prompt_dir / "behavior_prompt.txt").read_text(encoding="utf-8").strip(),
+            "system_prompt": system_file.read_text(encoding="utf-8").strip(),
+            "behavior_prompt": behavior_file.read_text(encoding="utf-8").strip(),
             "runtime_template": (prompt_dir / "runtime_template.txt").read_text(encoding="utf-8").strip(),
         }
         _persona_prompt_cache[persona_key] = bundle

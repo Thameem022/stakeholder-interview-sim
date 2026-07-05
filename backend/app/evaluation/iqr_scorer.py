@@ -17,7 +17,7 @@ from app.evaluation.iqr_schema import SessionEvaluation, TopStrip, Transcript
 from app.personas.prompt_assembly import _load_persona_config
 
 # Default prompt path — evaluator system prompts (versioned; bump version here to upgrade)
-DEFAULT_PROMPT_PATH = Path(__file__).parent / "prompts" / "iqr" / "v1" / "system_prompt.txt"
+DEFAULT_PROMPT_PATH = Path(__file__).parent / "prompts" / "iqr" / "v2" / "system_prompt.txt"
 SIC_KEYS_DIR = Path(__file__).parent / "sic_keys"
 
 

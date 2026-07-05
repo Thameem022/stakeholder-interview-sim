@@ -33,24 +33,28 @@
       "recognizing_structural_blind_spots"
     ]
   },
+  "grading_rules": {
+    "tier_2_requires_gate": true,
+    "tier_2_gate_rationale": "Tom naturally volunteers contextual content about regulatory ambiguity, incentives, and path dependency in response to broad questions. To distinguish students who actually probe from students who simply triggered Tom's natural disclosure, Tier 2 items also require a targeted student question or framing move that names the topic before the persona's mention."
+  },
   "tier_metadata": {
     "1": {
       "title": "Technical, Regulatory, and Market Knowledge",
       "category": "Technical",
       "description": "Accessible through competent, informed questioning — flood compliance standards, engineering and design responses, insurance and financing dynamics, and waterfront market behavior. Tom is confident and fluent here.",
-      "why_it_matters": "Tom's technical fluency establishes his perceived legitimacy and reflects how formal systems currently operate. Many students stop here, mistaking fluency for completeness. Without seeing what lies beyond it, students will not understand why current development continues at scale."
+      "why_it_matters": "Tom's technical fluency establishes his perceived legitimacy and reflects how formal systems currently operate. Many interviews stop here, mistaking fluency for completeness. If you don't see what lies beyond it, your adaptation plan won't be able to explain why current development continues at scale."
     },
     "2": {
       "title": "Policy Ambiguity, Incentive Alignment, and System Lag",
       "category": "Contextual",
       "description": "Surfaces when students ask not just what Tom does, but why the system allows it — policy ambiguity, incentive misalignment, regulatory lag, and emerging path dependency",
-      "why_it_matters": "These structural patterns reveal how adaptation trajectories are shaped indirectly. 'Neutral' compliance can have directional effects. Students must connect regulation to future risk rather than treating compliance as static."
+      "why_it_matters": "These structural patterns are how adaptation trajectories get shaped indirectly. 'Neutral' compliance has directional effects, and if you treat compliance as static, your plan will miss how regulation today reshapes risk a decade out. Connecting regulation to future risk is the work."
     },
     "3": {
       "title": "Ethical, Strategic, and System-Shaping Insight",
       "category": "Strategic",
       "description": "Emerges only when students engage Tom at the level of system consequence rather than moral intention — that today's building shapes tomorrow's adaptation, that compliance does not equal sustainability, that capital sets de facto priorities, and Tom's quiet unease about long-term resolution",
-      "why_it_matters": "Tom's deepest knowledge is about how power operates through inaction — how investment decisions made today narrow tomorrow's adaptation options without anyone explicitly choosing that path. Missing this misreads developers as villains and overlooks the structural way the system defers decisions to the market."
+      "why_it_matters": "Tom's deepest knowledge is about how power operates through inaction — how investment decisions made today narrow tomorrow's adaptation options without anyone explicitly choosing that path. If you miss this, you'll misread developers as villains and miss the structural way the system defers hard decisions to the market — exactly the dynamic your adaptation plan needs to address."
     }
   },
   "strong_interview_motifs": {
