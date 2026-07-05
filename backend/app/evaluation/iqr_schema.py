@@ -42,12 +42,40 @@ DimensionName = Literal[
 ]
 
 
+StakeholderResponsePattern = Literal[
+    "became_guarded",
+    "opened_up",
+    "neutral",
+]
+
+
 class DimensionAssessment(BaseModel):
     dimension: DimensionName
     score: float = Field(..., ge=1.0, le=10.0)
     assessment: str
     evidence_quote: str
     what_was_missed: str
+    stakeholder_response_pattern: Optional[StakeholderResponsePattern] = Field(
+        default=None,
+        description=(
+            "Only set for framing_and_stakeholder_fit. Names how the stakeholder's "
+            "disclosure shifted in response to the student's framing/tone. "
+            "'became_guarded' = stakeholder shortened answers, stopped volunteering, "
+            "or got tight-lipped after a specific student turn. 'opened_up' = "
+            "stakeholder visibly deepened disclosure after a student move. "
+            "'neutral' = no clear inflection."
+        ),
+    )
+    cause_effect_explanation: Optional[str] = Field(
+        default=None,
+        description=(
+            "Only required when stakeholder_response_pattern is 'became_guarded' "
+            "or 'opened_up'. One concrete sentence in the format "
+            "'Because you <specific student behavior>, <stakeholder name> "
+            "<observable response shift>, <consequence for the interview>.' "
+            "Must name the specific student turn that caused the shift."
+        ),
+    )
 
 
 class TopStrip(BaseModel):

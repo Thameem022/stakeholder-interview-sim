@@ -56,11 +56,10 @@ class TokenRequest(BaseModel):
     persona_id: str
     voice_id: Optional[str] = None
     session_id: Optional[str] = None
-    # When true, the OpenAI session is configured so user audio during an
-    # in-progress response is IGNORED server-side (interrupt_response=false).
-    # Combined with the browser-side mic gating, this guarantees the persona
-    # can't be cut off mid-turn.
-    turn_based: bool = False
+    # TODO(remove after one release cycle): legacy field kept so cached
+    # frontend bundles don't 422 mid-rollout. The simulator now always runs
+    # in no-barge-in mode regardless of this value.
+    turn_based: Optional[bool] = None
 
 
 class TokenResponse(BaseModel):
@@ -69,34 +68,20 @@ class TokenResponse(BaseModel):
     model: str
 
 
-def _build_session_config(
-    persona_id: str, voice_id: str, turn_based: bool = False
-) -> Dict[str, Any]:
+def _build_session_config(persona_id: str, voice_id: str) -> Dict[str, Any]:
     instructions = build_persona_system_prompt(persona_id)
 
-    # Turn-detection config:
-    # - interrupt_response=false in turn-based mode → user audio during the
-    #   assistant's turn is ignored by the server (no accidental cancels).
-    # - threshold: VAD activation threshold (0–1). Open-mic uses 0.65 so
-    #   throat-clearing, breath, and short noise don't trigger false turns;
-    #   turn-based uses 0.8 (mic is normally silenced, only clear speech counts).
-    # - prefix_padding_ms: audio included before VAD trigger so the first
-    #   syllable isn't clipped. Raised to 400 ms to compensate for the higher
-    #   open-mic threshold.
-    # - silence_duration_ms: how long of silence before the buffer commits.
-    #   2000ms — full 2-second turn-completion buffer so the persona does not
-    #   begin responding until the interviewer has clearly finished speaking.
-    #   This eliminates the early-turn-order artifact where the persona answered
-    #   mid-utterance during a natural pause in a long opening (item 9).
-    # - create_response=true so user replies still auto-trigger a response —
-    #   no buttons.
+    # No-barge-in turn detection. interrupt_response=false means user audio
+    # during the assistant's turn is ignored server-side, so the persona can
+    # never be cut off. Combined with the browser-side mic gating in
+    # webrtc.ts, this guarantees clean turn-taking.
     turn_detection: Dict[str, Any] = {
         "type": "server_vad",
-        "threshold": 0.95 if turn_based else 0.85,
+        "threshold": 0.95,
         "prefix_padding_ms": 400,
         "silence_duration_ms": 1500,
         "create_response": True,
-        "interrupt_response": not turn_based,
+        "interrupt_response": False,
     }
 
     return {
@@ -135,9 +120,7 @@ async def mint_token(req: TokenRequest) -> TokenResponse:
         sid = uuid4()
 
     voice_id = req.voice_id or VOICE_MAP.get(req.persona_id, "alloy")
-    session_config = _build_session_config(
-        req.persona_id, voice_id, turn_based=req.turn_based
-    )
+    session_config = _build_session_config(req.persona_id, voice_id)
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         try:
@@ -177,8 +160,7 @@ async def mint_token(req: TokenRequest) -> TokenResponse:
     await session.persist()
 
     logger.info(
-        f"minted ephemeral key for session={sid} persona={req.persona_id} "
-        f"turn_based={req.turn_based}"
+        f"minted ephemeral key for session={sid} persona={req.persona_id}"
     )
     return TokenResponse(
         ephemeral_key=ephemeral_key,

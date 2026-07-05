@@ -8,7 +8,6 @@ import ScorePage from './ScorePage'
 function InterviewView() {
   const [personas, setPersonas] = useState<Persona[]>([])
   const [selected, setSelected] = useState<string>('')
-  const [turnBased, setTurnBased] = useState(false)
   const [scoring, setScoring] = useState(false)
   const navigate = useNavigate()
 
@@ -16,7 +15,7 @@ function InterviewView() {
     getPersonas().then(setPersonas).catch(() => setPersonas([]))
   }, [])
 
-  const session = useRealtimeSession({ personaId: selected, turnBased })
+  const session = useRealtimeSession({ personaId: selected })
 
   const handleEnd = async () => {
     const sid = session.sessionId
@@ -80,32 +79,6 @@ function InterviewView() {
               </option>
             ))}
           </select>
-        </div>
-
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Mic sensitivity</label>
-          <div className="inline-flex rounded-md border border-gray-300 bg-white p-1 gap-1">
-            <button
-              type="button"
-              onClick={() => setTurnBased(false)}
-              disabled={session.status !== 'idle'}
-              className={`px-3 py-1.5 text-sm rounded font-medium transition ${
-                !turnBased ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              More sensitive
-            </button>
-            <button
-              type="button"
-              onClick={() => setTurnBased(true)}
-              disabled={session.status !== 'idle'}
-              className={`px-3 py-1.5 text-sm rounded font-medium transition ${
-                turnBased ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              Less sensitive
-            </button>
-          </div>
         </div>
 
         {selected && (

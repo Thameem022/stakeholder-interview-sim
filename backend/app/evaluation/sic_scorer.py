@@ -498,4 +498,17 @@ class SICScorer:
 
             tier_coverages.append(coverage)
 
+        # ── Enrich with LLM-generated display labels and consequence text ──
+        from app.evaluation.sic_enrichment import enrich_sic_results
+
+        enrichment = await enrich_sic_results(tier_coverages, tier_metadata)
+        if enrichment:
+            label_map = {il.chunk_id: il.display_label for il in enrichment.item_labels}
+            consequence_map = {tc.tier: tc.consequence_text for tc in enrichment.tier_consequences}
+            for tc in tier_coverages:
+                tc["consequence_text"] = consequence_map.get(tc["tier"], "")
+                for item in tc.get("items", []):
+                    if item["chunk_id"] in label_map:
+                        item["display_label"] = label_map[item["chunk_id"]]
+
         return tier_coverages

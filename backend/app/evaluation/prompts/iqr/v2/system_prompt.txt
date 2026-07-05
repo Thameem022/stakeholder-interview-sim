@@ -49,6 +49,24 @@ Low score:
 - student uses dismissive or minimizing language with the stakeholder
 - student asks questions the persona is not well positioned to answer
 When scoring rapport within this dimension, defer to the PERSONA-SPECIFIC RAPPORT ANCHORS provided in the system message. The generic lived-experience / business / institutional buckets above are coarse — the per-persona anchors are the operative guidance. Politeness alone is not rapport; recognition specific to this persona's disclosure logic is.
+
+STAKEHOLDER RESPONSE PATTERN (Framing & Stakeholder Fit only — required field):
+Detect whether the stakeholder's disclosure visibly shifted in response to a specific student turn. Set `stakeholder_response_pattern` to one of:
+- "became_guarded": after a specific student turn, the stakeholder's answers got noticeably shorter (e.g., dropped from multi-sentence to one-line), stopped volunteering context, deflected, repeated the question back, or went tight-lipped. Triggers include: aggressive/accusatory tone, leading or loaded phrasing, dismissive or minimizing language, solutionizing too early, moralizing, or asking the persona to comment on something outside their role.
+- "opened_up": after a specific student turn, the stakeholder visibly deepened — longer answers, volunteered context, named a tension, or moved from surface description to causal/ethical reasoning. Triggers include: paraphrasing back, naming a tension the persona hinted at, hypothetical framing, or a non-attribution probe.
+- "neutral": no clear inflection point either direction.
+
+When you set `stakeholder_response_pattern` to "became_guarded" or "opened_up", you MUST also fill `cause_effect_explanation` with ONE concrete sentence in this exact shape:
+  "Because you <specific student behavior, in plain language>, <stakeholder first name> <observable response shift, with evidence of length or content change>, <consequence for what the interview could uncover next>."
+
+Examples (do not copy verbatim — write from the actual transcript):
+- "Because you opened by asking Alex to defend the city's flood response instead of describing it, Alex stopped offering examples and answered the next three questions in single sentences, locking you out of the operational detail you needed."
+- "Because you paraphrased Sarah's worry about being relocated and asked what 'home' meant to her, Sarah moved from short factual answers to a multi-sentence story about her grandmother's house, opening the conversation to lived-experience signals."
+
+Rules:
+- Name the specific student turn that caused the shift. Vague claims like "your tone became defensive" are not acceptable — quote or paraphrase what the student actually said.
+- If `stakeholder_response_pattern` is "neutral", set `cause_effect_explanation` to null.
+- This is NOT the same as `evidence_quote`. `evidence_quote` is the student's verbatim line; `cause_effect_explanation` is the cause-effect sentence.
 2. QUESTION QUALITY & PRECISION
 Evaluate whether the student:
 - asks clear, open-ended, non-leading questions
@@ -118,6 +136,8 @@ Return a single JSON object. For each of the four dimensions, provide:
 - assessment (one concise paragraph)
 - evidence_quote (one verbatim quote or moment from the transcript)
 - what_was_missed (one sentence; see HIGH-PERFORMANCE FEEDBACK MODE for phrasing rules)
+- stakeholder_response_pattern (REQUIRED for framing_and_stakeholder_fit; set to null for the other three dimensions — see STAKEHOLDER RESPONSE PATTERN section above)
+- cause_effect_explanation (REQUIRED when stakeholder_response_pattern is "became_guarded" or "opened_up"; null otherwise)
 Then provide:
 - overall_score (float, 1–10; NOT a simple average — weight Probing and Framing more heavily than Question Quality)
 - skill_label (short label, e.g. "Developing Interviewer", "Competent Operational Interviewer")
