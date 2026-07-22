@@ -6,13 +6,21 @@
   position: relative;
 }
 
-.avatar-image {
-  width: 160px;
-  height: 160px;
-  border-radius: 50%;
-  object-fit: cover;
+/* TalkingHead appends its WebGL canvas here; it needs explicit dimensions. */
+.avatar-canvas {
+  width: 100%;
+  max-width: 1080px;
+  height: 540px;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: linear-gradient(180deg, #eef2f7 0%, #dde4ed 100%);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-  transition: box-shadow 0.3s;
+}
+
+.avatar-canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .avatar-placeholder {
@@ -29,23 +37,8 @@
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
 }
 
-.avatar-mouth {
-  width: 50px;
-  height: 14px;
-  background: #1f2937;
-  border-radius: 7px;
-  margin-top: -32px;
-  margin-bottom: 16px;
-  transform-origin: center;
-  transition: transform 0.05s ease-out;
-  opacity: 0.85;
-}
-
-.avatar-mouth.speaking {
-  background: #111827;
-}
-
 .avatar-name {
+  margin-top: 0.5rem;
   font-size: 1rem;
   font-weight: 500;
   color: #374151;

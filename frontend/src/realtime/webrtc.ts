@@ -14,6 +14,7 @@ import { getRealtimeToken, postRetrieve, postTranscript } from '../api'
 
 export interface RealtimeCallbacks {
   onSessionReady?: (sessionId: string) => void
+  onRemoteStream?: (stream: MediaStream) => void
   onUserTranscript?: (text: string) => void
   onAssistantTranscript?: (running: string) => void
   onAssistantDone?: (final: string) => void
@@ -54,6 +55,7 @@ export class RealtimeWebRTCSession {
   private audioEl: HTMLAudioElement | null = null
   private audioCtx: AudioContext | null = null
   private analyser: AnalyserNode | null = null
+  private remoteStream: MediaStream | null = null
   private sessionId: string | null = null
   private personaId = ''
   private assistantBuf = ''
@@ -63,6 +65,10 @@ export class RealtimeWebRTCSession {
 
   get analyserNode(): AnalyserNode | null {
     return this.analyser
+  }
+
+  get remoteAudioStream(): MediaStream | null {
+    return this.remoteStream
   }
 
   get currentSessionId(): string | null {
@@ -88,6 +94,8 @@ export class RealtimeWebRTCSession {
     pc.ontrack = (e) => {
       audioEl.srcObject = e.streams[0]
       void audioEl.play().catch(() => {})
+      this.remoteStream = e.streams[0]
+      opts.callbacks.onRemoteStream?.(e.streams[0])
       this.setupAnalyser(e.streams[0], opts.callbacks)
     }
 
@@ -148,6 +156,7 @@ export class RealtimeWebRTCSession {
     }
     this.audioCtx = null
     this.analyser = null
+    this.remoteStream = null
     this.pc = null
     this.dc = null
     this.localStream = null

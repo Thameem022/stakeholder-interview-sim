@@ -46,7 +46,7 @@ function InterviewView() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <main className="max-w-3xl mx-auto p-6">
+      <main className="max-w-6xl mx-auto p-6">
         <div className="flex justify-end gap-2 mb-4">
           {showViewScore && (
             <button
@@ -84,8 +84,9 @@ function InterviewView() {
         {selected && (
           <>
             <Avatar
-              analyser={session.analyser}
-              isSpeaking={session.isAssistantSpeaking}
+              audioStream={session.remoteStream}
+              active={session.status === 'live'}
+              personaId={selected}
               personaName={personaName}
             />
 

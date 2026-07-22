@@ -16,6 +16,7 @@ export interface RealtimeSession {
   isUserSpeaking: boolean
   isAssistantSpeaking: boolean
   analyser: AnalyserNode | null
+  remoteStream: MediaStream | null
   error: string | null
   start: () => Promise<void>
   end: () => void
@@ -29,6 +30,7 @@ export function useRealtimeSession(opts: UseRealtimeSessionOptions): RealtimeSes
   const [isAssistantSpeaking, setIsAssistantSpeaking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null)
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
 
   const sessionRef = useRef<RealtimeWebRTCSession | null>(null)
 
@@ -36,6 +38,7 @@ export function useRealtimeSession(opts: UseRealtimeSessionOptions): RealtimeSes
     sessionRef.current?.disconnect()
     sessionRef.current = null
     setAnalyser(null)
+    setRemoteStream(null)
     setIsAssistantSpeaking(false)
   }, [])
 
@@ -46,6 +49,7 @@ export function useRealtimeSession(opts: UseRealtimeSessionOptions): RealtimeSes
       void sess.endAndPersist().finally(() => {
         sessionRef.current = null
         setAnalyser(null)
+        setRemoteStream(null)
         setIsAssistantSpeaking(false)
         setStatus('idle')
       })
@@ -70,6 +74,7 @@ export function useRealtimeSession(opts: UseRealtimeSessionOptions): RealtimeSes
         voiceId: opts.voiceId,
         callbacks: {
           onSessionReady: (sid) => setSessionId(sid),
+          onRemoteStream: (stream) => setRemoteStream(stream),
           onUserTranscript: (text) => setUserTranscript(text),
           onAssistantTranscript: (running) => setAssistantTranscript(running),
           onAssistantDone: () => {
@@ -96,6 +101,7 @@ export function useRealtimeSession(opts: UseRealtimeSessionOptions): RealtimeSes
     isUserSpeaking: false,
     isAssistantSpeaking,
     analyser,
+    remoteStream,
     error,
     start,
     end,
