@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import mimetypes
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -8,6 +9,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
+# Ensure ES module scripts (.mjs) are served as text/javascript regardless of the
+# host OS / interpreter mime map. Browsers reject AudioWorklet modules and dynamic
+# import() of any script served with a non-JS MIME type, which silently breaks the
+# HeadAudio lip-sync pipeline (public/headaudio/dist/*.mjs) in production.
+mimetypes.add_type("text/javascript", ".mjs")
 
 logging.basicConfig(
     level=logging.INFO,
