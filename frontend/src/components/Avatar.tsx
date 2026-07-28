@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { TalkingHead } from '@met4citizen/talkinghead'
 import './Avatar.css'
 
@@ -33,9 +33,15 @@ const AVATARS: Record<string, { url: string; body: 'M' | 'F'; bg?: string }> = {
 // HeadAudio assets, served from public/headaudio/. The dist bundles are
 // self-contained (no relative imports), so they can be loaded at runtime
 // without going through the Vite build.
-const HEADAUDIO_MODULE_URL = '/headaudio/dist/headaudio.min.mjs'
-const HEADAUDIO_WORKLET_URL = '/headaudio/dist/headworklet.min.mjs'
-const HEADAUDIO_MODEL_URL = '/headaudio/dist/model-en-mixed.bin'
+//
+// The ?v= query is a cache-buster: during a broken deploy these URLs briefly
+// returned index.html, which browsers cached and kept serving (breaking
+// addModule/import with "AbortError"). Bump the version if these files ever
+// change or get cache-poisoned again — the server ignores the query.
+const HEADAUDIO_ASSET_VERSION = 'v=2'
+const HEADAUDIO_MODULE_URL = `/headaudio/dist/headaudio.min.mjs?${HEADAUDIO_ASSET_VERSION}`
+const HEADAUDIO_WORKLET_URL = `/headaudio/dist/headworklet.min.mjs?${HEADAUDIO_ASSET_VERSION}`
+const HEADAUDIO_MODEL_URL = `/headaudio/dist/model-en-mixed.bin?${HEADAUDIO_ASSET_VERSION}`
 
 // Runtime shape of the HeadAudio AudioWorkletNode (public/headaudio/dist/headaudio.min.mjs).
 interface HeadAudioNode extends AudioWorkletNode {
@@ -72,6 +78,10 @@ export function Avatar({ audioStream, active, personaId, personaName }: AvatarPr
   // down / failed). The stream + active effects await this to wire audio.
   const instanceRef = useRef<Promise<HeadInstance | null> | null>(null)
 
+  // 'loading' while the GLB + HeadAudio pipeline download/initialize (~15s on a
+  // slow connection), 'ready' once the avatar is live, 'error' if setup failed.
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+
   const avatarConfig = AVATARS[personaId]
   const hasModel = !!avatarConfig
 
@@ -83,6 +93,7 @@ export function Avatar({ audioStream, active, personaId, personaName }: AvatarPr
 
     let cancelled = false
     let local: HeadInstance | null = null
+    setStatus('loading')
 
     const setup = async (): Promise<HeadInstance | null> => {
       const head = new TalkingHead(container, {
@@ -90,14 +101,13 @@ export function Avatar({ audioStream, active, personaId, personaName }: AvatarPr
         lipsyncModules: [], // visemes come from HeadAudio, not TTS text
       })
 
-      // mtAvatar (morph targets) exists only after the avatar has loaded.
-      await head.showAvatar({ url: avatar.url, body: avatar.body, avatarMood: 'neutral' })
-      if (cancelled) {
-        disposeHead(head)
-        return null
-      }
-
-      await head.audioCtx.audioWorklet.addModule(HEADAUDIO_WORKLET_URL)
+      // Build the audio pipeline FIRST, while the AudioContext is fresh — the
+      // worklet/model are tiny (~34 KB). showAvatar's GLB download can take ~15s
+      // on a slow connection; if we called addModule only after that, the
+      // idle context aborted the worklet load in production ("AbortError:
+      // Unable to load a worklet's module"). showAvatar never recreates
+      // head.audioCtx, so loading the worklet up front is safe.
+      await addWorkletModuleWithRetry(head.audioCtx, HEADAUDIO_WORKLET_URL)
       // Resolve to an absolute runtime URL so Vite can't constant-fold the
       // literal and try to bundle this /public ESM through its transforms.
       const moduleUrl = new URL(HEADAUDIO_MODULE_URL, window.location.origin).href
@@ -111,6 +121,17 @@ export function Avatar({ audioStream, active, personaId, personaName }: AvatarPr
         parameterData: { vadGateActiveDb: -40, vadGateInactiveDb: -60 },
       })
       await headaudio.loadModel(HEADAUDIO_MODEL_URL)
+      if (cancelled) {
+        try {
+          headaudio.disconnect()
+        } catch {}
+        disposeHead(head)
+        return null
+      }
+
+      // Now load the avatar mesh (the slow part). mtAvatar (morph targets) only
+      // exists after this resolves, so wire the viseme callback afterwards.
+      await head.showAvatar({ url: avatar.url, body: avatar.body, avatarMood: 'neutral' })
       if (cancelled) {
         try {
           headaudio.disconnect()
@@ -138,6 +159,11 @@ export function Avatar({ audioStream, active, personaId, personaName }: AvatarPr
       return null
     })
     instanceRef.current = instance
+    // Flip the loader once THIS setup settles. The `cancelled` guard means a
+    // superseded persona switch never overwrites the current one's status.
+    void instance.then((inst) => {
+      if (!cancelled) setStatus(inst ? 'ready' : 'error')
+    })
 
     return () => {
       cancelled = true
@@ -213,8 +239,7 @@ export function Avatar({ audioStream, active, personaId, personaName }: AvatarPr
     <div className="avatar-container">
       {hasModel ? (
         <div
-          ref={containerRef}
-          className="avatar-canvas"
+          className="avatar-stage"
           style={
             avatarConfig?.bg
               ? {
@@ -224,7 +249,23 @@ export function Avatar({ audioStream, active, personaId, personaName }: AvatarPr
                 }
               : undefined
           }
-        />
+        >
+          {/* TalkingHead owns this node's children imperatively — keep it React-empty. */}
+          <div ref={containerRef} className="avatar-canvas" />
+          {status === 'loading' && (
+            <div className="avatar-overlay">
+              <div className="avatar-spinner" />
+              <div className="avatar-overlay-text">Setting up the simulator…</div>
+            </div>
+          )}
+          {status === 'error' && (
+            <div className="avatar-overlay avatar-overlay--error">
+              <div className="avatar-overlay-text">
+                Couldn't load the avatar — try reselecting the persona.
+              </div>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="avatar-placeholder">{personaName.charAt(0)}</div>
       )}
@@ -233,12 +274,38 @@ export function Avatar({ audioStream, active, personaId, personaName }: AvatarPr
   )
 }
 
+// Register the HeadAudio worklet processor, retrying the occasional transient
+// "AbortError: Unable to load a worklet's module" that Chrome raises under load.
+async function addWorkletModuleWithRetry(
+  ctx: AudioContext,
+  url: string,
+  attempts = 3
+): Promise<void> {
+  for (let i = 1; ; i++) {
+    try {
+      await ctx.audioWorklet.addModule(url)
+      return
+    } catch (e) {
+      if (i >= attempts || ctx.state === 'closed') throw e
+      await new Promise((r) => setTimeout(r, 200 * i))
+    }
+  }
+}
+
 // Dispose a TalkingHead and close its AudioContext, tolerating an already
-// closed context (StrictMode / rapid remounts).
+// closed context (StrictMode / rapid remounts). Capture the canvas up front and
+// remove it explicitly: on a head torn down before showAvatar ran (a rapid
+// persona switch), TalkingHead.dispose() can throw partway and leave its <canvas>
+// in the DOM, which would otherwise stack up on every switch.
 function disposeHead(head: TalkingHead) {
   const ctx = head.audioCtx
+  const canvas = (head as unknown as { renderer?: { domElement?: HTMLCanvasElement } }).renderer
+    ?.domElement
   try {
     head.dispose()
+  } catch {}
+  try {
+    canvas?.remove()
   } catch {}
   if (ctx && ctx.state !== 'closed') void ctx.close().catch(() => {})
 }

@@ -64,4 +64,10 @@ if static_dir.exists():
         file = static_dir / path
         if file.is_file():
             return FileResponse(file)
-        return FileResponse(static_dir / "index.html")
+        # SPA fallback must never be cached: if an asset is temporarily missing
+        # (e.g. mid-deploy), a cached index.html under that asset's URL would
+        # keep breaking module/worklet loads long after the asset is restored.
+        return FileResponse(
+            static_dir / "index.html",
+            headers={"Cache-Control": "no-store"},
+        )
