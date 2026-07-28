@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import mimetypes
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -8,6 +9,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
+# Ensure ES module scripts (.mjs) are served as text/javascript regardless of the
+# host OS / interpreter mime map. Browsers reject AudioWorklet modules and dynamic
+# import() of any script served with a non-JS MIME type, which silently breaks the
+# HeadAudio lip-sync pipeline (public/headaudio/dist/*.mjs) in production.
+mimetypes.add_type("text/javascript", ".mjs")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -57,4 +64,10 @@ if static_dir.exists():
         file = static_dir / path
         if file.is_file():
             return FileResponse(file)
-        return FileResponse(static_dir / "index.html")
+        # SPA fallback must never be cached: if an asset is temporarily missing
+        # (e.g. mid-deploy), a cached index.html under that asset's URL would
+        # keep breaking module/worklet loads long after the asset is restored.
+        return FileResponse(
+            static_dir / "index.html",
+            headers={"Cache-Control": "no-store"},
+        )
