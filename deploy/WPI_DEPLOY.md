@@ -105,7 +105,7 @@ rsync -avz \
 
 # Frontend
 rsync -avz \
-  --exclude '.git' --exclude 'node_modules' --exclude 'dist' \
+  --exclude '.git' --exclude 'node_modules' --exclude '/dist' \
   frontend/ mohammedthameem@stakeholder-engagement-simulator.wpi.edu:~/stakeholder-engagement-simulator-upload/frontend/
 
 # Deploy artifacts (apache/systemd/this doc)
@@ -255,7 +255,7 @@ rsync -avz \
 
 # Frontend (whenever React code or styles change)
 rsync -avz \
-  --exclude '.git' --exclude 'node_modules' --exclude 'dist' \
+  --exclude '.git' --exclude 'node_modules' --exclude '/dist' \
   frontend/ mohammedthameem@stakeholder-engagement-simulator.wpi.edu:~/stakeholder-engagement-simulator-upload/frontend/
 ```
 
