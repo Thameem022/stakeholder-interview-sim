@@ -1,0 +1,3 @@
+model,api_calls,total_usd,usd_per_iqr_sic_pair,p50_latency_ms,p95_latency_ms
+gpt-4o,472,9.0221,0.03759,9685.25,15612.029999999999
+gpt-4o-mini,541,0.6483,0.0027,6541.799999999999,8526.479999999998

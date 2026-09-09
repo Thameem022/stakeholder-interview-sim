@@ -162,7 +162,16 @@ cd /opt/stakeholder-engagement-simulator/backend
 sudo -u mohammedthameem uv run alembic upgrade head
 ```
 
-You should see both migrations apply: `0001_initial` then `0002_session_evaluations`.
+You should see every migration apply in order, `0001_initial` through `0005_session_ownership`.
+
+> **`alembic` does not load `.env`.** `alembic/env.py` falls back to the DSN in
+> `alembic.ini` (`postgres:postgres@localhost/sis`), which is not this server's
+> credentials. Pass `DATABASE_URL` explicitly, or `source ../.env && export DATABASE_URL`
+> first, or the migration will fail to connect — or worse, connect to the wrong database.
+
+> **On a fresh install `0005` is a no-op** (no interview sessions exist yet). On an
+> existing install it needs a user account to assign the old sessions to — see
+> *Upgrading an existing install to authenticated access* below.
 
 ### 10. Seed embeddings (one-shot, ~5–10 min)
 
@@ -269,7 +278,10 @@ sudo chown -R mohammedthameem:www-data /opt/stakeholder-engagement-simulator
 cd /opt/stakeholder-engagement-simulator/backend && sudo -u mohammedthameem uv sync
 
 # If alembic/versions/ has new migrations:
-cd /opt/stakeholder-engagement-simulator/backend && sudo -u mohammedthameem uv run alembic upgrade head
+# NOTE: alembic does not read .env — pass DATABASE_URL explicitly.
+cd /opt/stakeholder-engagement-simulator/backend && sudo -u mohammedthameem \
+  DATABASE_URL="$(grep '^DATABASE_URL=' /opt/stakeholder-engagement-simulator/.env | cut -d= -f2-)" \
+  uv run alembic upgrade head
 
 # If you re-ran scripts/build_persona_config.py or world chunks changed:
 cd /opt/stakeholder-engagement-simulator/backend && sudo -u mohammedthameem -E uv run python scripts/embed_and_load.py
@@ -284,6 +296,65 @@ sudo -u mohammedthameem cp -R dist /opt/stakeholder-engagement-simulator/backend
 sudo systemctl restart stakeholder-engagement-simulator
 sudo systemctl status stakeholder-engagement-simulator
 ```
+
+---
+
+## Upgrading an existing install to authenticated access (migration 0005)
+
+**Do this once, and read it before running `alembic upgrade head`.** The usual
+"migrate, then restart" order breaks this particular upgrade in two ways:
+
+- `0005` makes `interview_sessions.user_id` `NOT NULL`. Between the migration and
+  the restart, the *old* build is still running and its INSERT omits that column,
+  so every `POST /api/realtime/token` fails with a 500.
+- `0005` needs a `users` row to assign the pre-auth sessions to, and user rows are
+  only created through `POST /api/auth/set-password` — an endpoint of the app
+  itself. Migrating first on an empty `users` table aborts the migration.
+
+Correct sequence:
+
+1. **With the current build still running**, create the account that will inherit
+   the old interview data — register and set a password through the web UI. Any
+   `@wpi.edu` address on `AUTH_REGISTRATION_ALLOWLIST` works.
+
+2. **Stop the service.** Roughly a minute of downtime is the simple, correct
+   answer here; the alternative (a temporary column default) can silently
+   mis-attribute any session created during the window.
+
+   ```bash
+   sudo systemctl stop stakeholder-engagement-simulator
+   ```
+
+3. Deploy the new code as in section 2 above (rsync, `uv sync`, `npm run build`,
+   copy `dist` → `backend/static`) — but **do not** run the migration line yet.
+
+4. Run the migration with both variables set explicitly:
+
+   ```bash
+   cd /opt/stakeholder-engagement-simulator/backend
+   sudo -u mohammedthameem \
+     DATABASE_URL="$(grep '^DATABASE_URL=' ../.env | cut -d= -f2-)" \
+     LEGACY_SESSION_OWNER_EMAIL=youraccount@wpi.edu \
+     uv run alembic upgrade head
+   ```
+
+   Confirm the line `0005: assigned N orphaned interview_sessions to youraccount@wpi.edu`.
+   If the account cannot be found the migration aborts and rolls back — nothing is
+   half-applied, so fix the address and re-run.
+
+5. Start the service and confirm an anonymous request is now refused:
+
+   ```bash
+   sudo systemctl start stakeholder-engagement-simulator
+   curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+     -H 'Content-Type: application/json' -d '{"persona_id":"alex_martinez"}' \
+     https://stakeholder-engagement-simulator.wpi.edu/api/realtime/token   # expect 401
+   curl -s -o /dev/null -w '%{http_code}\n' \
+     https://stakeholder-engagement-simulator.wpi.edu/api/health           # expect 200
+   ```
+
+Also set `LEGACY_SESSION_OWNER_EMAIL=` back to empty (or remove it) afterwards —
+it is read only by this migration and never by the application.
 
 ### 3. Verify
 
