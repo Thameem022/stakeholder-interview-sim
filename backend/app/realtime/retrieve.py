@@ -11,18 +11,28 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from app.auth.dependencies import CurrentUser, rate_limited, require_user
 from app.realtime.session import InterviewSession
 from app.vector_store import embed_one, search_persona, search_world
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Driven by the model's own tool calls, so roughly 20-40 per interview. This
+# ceiling exists to stop a runaway tool-call loop, not to manage spend — each
+# call is one text-embedding-3-small request.
+_RETRIEVE_LIMIT = ("realtime-retrieve", 300, 3600)
+
+# Two writes per conversational turn, no external cost. Bounds table growth
+# from a stuck client, nothing more.
+_TRANSCRIPT_LIMIT = ("realtime-transcript", 600, 3600)
 
 
 class RetrieveRequest(BaseModel):
@@ -62,7 +72,11 @@ def _format_context(persona_chunks, world_chunks) -> str:
     return "\n".join(lines)
 
 
-@router.post("/realtime/retrieve", response_model=RetrieveResponse)
+@router.post(
+    "/realtime/retrieve",
+    response_model=RetrieveResponse,
+    dependencies=[Depends(rate_limited(*_RETRIEVE_LIMIT))],
+)
 async def retrieve_context(req: RetrieveRequest) -> RetrieveResponse:
     if not req.persona_id or not req.query.strip():
         raise HTTPException(status_code=400, detail="persona_id and query required")
@@ -95,14 +109,22 @@ async def retrieve_context(req: RetrieveRequest) -> RetrieveResponse:
     return RetrieveResponse(text=text)
 
 
-@router.post("/realtime/transcript")
-async def append_transcript(req: TranscriptRequest) -> dict:
+@router.post(
+    "/realtime/transcript",
+    dependencies=[Depends(rate_limited(*_TRANSCRIPT_LIMIT))],
+)
+async def append_transcript(
+    req: TranscriptRequest, user: Annotated[CurrentUser, Depends(require_user)]
+) -> dict:
     try:
         sid = UUID(req.session_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="invalid session_id")
 
-    session = await InterviewSession.load(sid)
+    # Someone else's session is indistinguishable from a nonexistent one, so a
+    # valid id cannot be confirmed by probing. persist() re-checks ownership on
+    # the write itself, which is what makes the gap between here and there safe.
+    session = await InterviewSession.load(sid, user.id)
     if session is None:
         raise HTTPException(status_code=404, detail="session not found")
 

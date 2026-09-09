@@ -4,16 +4,29 @@ import asyncio
 import json
 import logging
 import re
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.auth.dependencies import (
+    CurrentUser,
+    deny_session_access,
+    rate_limited,
+    require_user,
+)
 from app.db import get_pool
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Two gpt-4o calls over a full transcript — the most expensive request in the
+# app. One per interview is normal use; this is roughly ten times that.
+_IQR_LIMIT = ("eval-iqr", 20, 3600)
+
+# One gpt-4o call. No frontend caller, so any traffic here is ad-hoc.
+_SIC_LIMIT = ("eval-sic", 20, 3600)
 
 
 # Whisper / turn-splitting artifacts that arrive as isolated short turns.
@@ -52,15 +65,29 @@ SCORER_METADATA = {
 }
 
 
-async def _load_session(session_id: UUID) -> dict:
+async def _load_session(session_id: UUID, user_id: UUID) -> dict:
+    """Load a session the caller owns.
+
+    A session belonging to someone else answers exactly like one that does not
+    exist, so holding a UUID never confirms it names anything real. The
+    distinction is logged instead — see deny_session_access.
+    """
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT persona_id, transcript, metadata FROM interview_sessions WHERE id = $1",
+            """
+            SELECT persona_id, transcript, metadata
+            FROM interview_sessions
+            WHERE id = $1 AND user_id = $2
+            """,
             session_id,
+            user_id,
         )
-    if row is None:
-        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        if row is None:
+            owner = await conn.fetchval(
+                "SELECT user_id FROM interview_sessions WHERE id = $1", session_id
+            )
+            deny_session_access(session_id, user_id, owner)
     return dict(row)
 
 
@@ -78,7 +105,11 @@ def _parse_metadata(raw) -> dict:
 
 async def _persist_evaluation(session_id: UUID, payload: dict[str, Any]) -> None:
     """Insert one row per evaluation run. Failures are logged but never raised —
-    a DB write should not break the user-visible score."""
+    a DB write should not break the user-visible score.
+
+    No ownership check here: callers reach this only after _load_session has
+    already proved the session is theirs.
+    """
     try:
         pool = await get_pool()
         async with pool.acquire() as conn:
@@ -95,13 +126,13 @@ async def _persist_evaluation(session_id: UUID, payload: dict[str, Any]) -> None
         logger.warning(f"failed to persist evaluation for session {session_id}: {e}")
 
 
-@router.post("/eval/iqr")
-async def eval_iqr(session_id: UUID):
+@router.post("/eval/iqr", dependencies=[Depends(rate_limited(*_IQR_LIMIT))])
+async def eval_iqr(session_id: UUID, user: Annotated[CurrentUser, Depends(require_user)]):
     """Run IQR and SIC scorers in parallel; persist the merged result; return it."""
     from app.evaluation.iqr_scorer import IQRScorer, convert_transcript_to_iqr
     from app.evaluation.sic_scorer import SICScorer
 
-    session = await _load_session(session_id)
+    session = await _load_session(session_id, user.id)
     turns = _parse_transcript(session["transcript"])
     # Strip whisper/turn-splitting artifacts before scoring so noise can't
     # depress IQR/SIC results (item 11).
@@ -152,12 +183,12 @@ async def eval_iqr(session_id: UUID):
     return payload
 
 
-@router.post("/eval/sic")
-async def eval_sic(session_id: UUID):
+@router.post("/eval/sic", dependencies=[Depends(rate_limited(*_SIC_LIMIT))])
+async def eval_sic(session_id: UUID, user: Annotated[CurrentUser, Depends(require_user)]):
     """Run SIC scorer standalone (ad-hoc use; the frontend calls /eval/iqr)."""
     from app.evaluation.sic_scorer import SICScorer
 
-    session = await _load_session(session_id)
+    session = await _load_session(session_id, user.id)
     turns = sanitize_transcript(_parse_transcript(session["transcript"]))
 
     scorer = SICScorer()
@@ -166,24 +197,30 @@ async def eval_sic(session_id: UUID):
 
 
 @router.get("/eval/sessions/{session_id}/latest")
-async def get_latest_evaluation(session_id: str):
-    """Return the most recent persisted evaluation for a session, or 404 if none."""
-    try:
-        sid = UUID(session_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="invalid session_id")
+async def get_latest_evaluation(
+    session_id: UUID, user: Annotated[CurrentUser, Depends(require_user)]
+):
+    """Return the most recent persisted evaluation for a session, or 404 if none.
 
+    Not rate limited: this is one indexed read with no external cost, and
+    metering it would mean a database write per cheap read.
+    """
     pool = await get_pool()
     async with pool.acquire() as conn:
+        # Ownership comes from the join rather than a user_id column on
+        # session_evaluations — a second copy of the same fact would be free to
+        # drift, to save a primary-key lookup.
         row = await conn.fetchrow(
             """
-            SELECT evaluation, created_at
-            FROM session_evaluations
-            WHERE session_id = $1
-            ORDER BY created_at DESC
+            SELECT e.evaluation, e.created_at
+            FROM session_evaluations e
+            JOIN interview_sessions s ON s.id = e.session_id
+            WHERE e.session_id = $1 AND s.user_id = $2
+            ORDER BY e.created_at DESC
             LIMIT 1
             """,
-            sid,
+            session_id,
+            user.id,
         )
 
     if row is None:

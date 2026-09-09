@@ -48,3 +48,10 @@ Refefrence-to-iqr-sic/
 
 #Documents
 docs/
+
+# Evaluation harness (backend/evals/)
+# The call cache is content-addressed and rebuilt on demand; the raw per-call
+# JSONL is large (~6 MB per study) and regenerable, so only the manifests are
+# kept -- they carry the provenance every report cites.
+backend/evals/.cache/
+backend/evals/runs/**/records.jsonl

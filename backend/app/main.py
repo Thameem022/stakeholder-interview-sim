@@ -21,9 +21,13 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 
+from fastapi import Depends
+
+from app.api.auth import router as auth_router
 from app.api.eval import router as eval_router
 from app.api.health import router as health_router
 from app.api.personas import router as personas_router
+from app.auth.dependencies import require_user
 from app.config import settings
 from app.db import close_pool, init_pool
 from app.realtime.retrieve import router as realtime_retrieve_router
@@ -47,11 +51,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Public. /health is the deploy probe, and the auth router owns its own 401s —
+# gating it would lock everyone out of the login endpoints themselves.
 app.include_router(health_router, prefix="/api")
-app.include_router(personas_router, prefix="/api")
-app.include_router(eval_router, prefix="/api")
-app.include_router(realtime_token_router, prefix="/api")
-app.include_router(realtime_retrieve_router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
+
+# Everything else needs a session. Declared here rather than per-route so that
+# "what is public?" has exactly one answer, and so a route added to any of
+# these modules is protected the moment it is written rather than the moment
+# someone remembers to decorate it. Routes that need the caller's identity
+# still declare Depends(require_user) themselves; FastAPI caches on the
+# callable, so that is one session lookup per request, not two.
+_authenticated = [Depends(require_user)]
+app.include_router(personas_router, prefix="/api", dependencies=_authenticated)
+app.include_router(eval_router, prefix="/api", dependencies=_authenticated)
+app.include_router(realtime_token_router, prefix="/api", dependencies=_authenticated)
+app.include_router(realtime_retrieve_router, prefix="/api", dependencies=_authenticated)
 
 static_dir = Path(__file__).parent.parent / "static"
 if static_dir.exists():
