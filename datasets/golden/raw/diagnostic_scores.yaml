@@ -1,0 +1,176 @@
+# Human grader scores for the 16 pilot interviews, one block per transcript. Each score was
+# reviewed by the grader and recorded in that interview's "Interview Diagnostic" .docx report
+# under docs/Trial Run/. These are the reference scores for this corpus.
+#
+# The .docx reports hold page images rather than text, so the numbers were read off the report
+# by hand -- source_diagnostic on each block names the report a value came from, for re-checking.
+#
+# Status vocabulary mirrors backend/app/evaluation/sic_scorer.py:
+#   full | partial | not_accessed_insufficient_framing | not_accessed_appropriate_restraint
+#
+# Tier 3 percentages are credit-weighted, not raw counts (_TIER3_CREDIT_WEIGHT:
+# explicit=1.0, indirect=0.7, reflective_silence=0.5), so e.g. 4/4 cues can read 77.5%.
+#
+# WARNING: image filenames inside these .docx files are NOT document order. The report header
+# carrying the overall score is image5.jpeg in several documents. All five images per document
+# were read and assembled by content.
+
+"2026-06-15_alex_good":
+  source_diagnostic: "Round 1/Interviews/Alex Good_Interview Diagnostic_6.15.2026.docx"
+  overall: 9.0
+  skill_label: "Strong Interviewer"
+  dimensions: {framing_and_stakeholder_fit: 9.0, question_quality_and_precision: 8.5, probing_and_follow_up_depth: 9.0, listening_interpretation_and_stewardship: 9.0}
+  sic:
+    t1: {pct: 60,   found: 3, total: 5, status: partial}
+    t2: {pct: 80,   found: 4, total: 5, status: partial}
+    t3: {pct: 80,   found: 4, total: 5, status: partial}
+
+"2026-06-15_alex_bad":
+  source_diagnostic: "Round 1/Interviews/Alex_Bad_Interview Diagnostic_6.15.2026.docx"
+  overall: 2.0
+  skill_label: "Weak Interviewer"
+  dimensions: {framing_and_stakeholder_fit: 2.0, question_quality_and_precision: 3.0, probing_and_follow_up_depth: 2.0, listening_interpretation_and_stewardship: 2.0}
+  sic:
+    t1: {pct: 20,   found: 1, total: 5, status: partial}
+    t2: {pct: 0,    found: 0, total: 5, status: not_accessed_insufficient_framing}
+    t3: {pct: 0,    found: 0, total: 5, status: not_accessed_insufficient_framing}
+
+"2026-06-15_mike_good":
+  source_diagnostic: "Round 1/Interviews/Mike_Good_Interview Diagnostic_6.15.2026.docx"
+  overall: 9.0
+  skill_label: "Strong Interviewer"
+  dimensions: {framing_and_stakeholder_fit: 9.0, question_quality_and_precision: 8.5, probing_and_follow_up_depth: 9.0, listening_interpretation_and_stewardship: 9.0}
+  sic:
+    t1: {pct: 100,  found: 3, total: 3, status: full}
+    t2: {pct: 50,   found: 2, total: 4, status: partial}
+    t3: {pct: 77.5, found: 4, total: 4, status: partial}
+
+"2026-06-15_mike_bad":
+  source_diagnostic: "Round 1/Interviews/Mike_Bad_Interview Diagnostic_6.15.2026.docx"
+  overall: 2.0
+  skill_label: "Weak Interviewer"
+  dimensions: {framing_and_stakeholder_fit: 2.0, question_quality_and_precision: 3.0, probing_and_follow_up_depth: 2.0, listening_interpretation_and_stewardship: 2.0}
+  sic:
+    t1: {pct: 0,    found: 0, total: 3, status: not_accessed_insufficient_framing}
+    t2: {pct: 0,    found: 0, total: 4, status: not_accessed_insufficient_framing}
+    t3: {pct: 0,    found: 0, total: 4, status: not_accessed_insufficient_framing}
+
+"2026-06-15_sarah_good":
+  source_diagnostic: "Round 1/Interviews/Sarah_Good_Interview Diagnostic_6.15.2026.docx"
+  overall: 8.8
+  skill_label: "Strong Interviewer"
+  dimensions: {framing_and_stakeholder_fit: 9.0, question_quality_and_precision: 8.5, probing_and_follow_up_depth: 9.0, listening_interpretation_and_stewardship: 8.5}
+  sic:
+    t1: {pct: 100,  found: 4, total: 4, status: full}
+    t2: {pct: 75,   found: 3, total: 4, status: partial}
+    t3: {pct: 85,   found: 4, total: 4, status: partial}
+
+"2026-06-15_sarah_bad":
+  source_diagnostic: "Round 1/Interviews/Sarah_Bad_Interview Diagnostic_6.15.2026.docx"
+  overall: 1.5
+  skill_label: "Misaligned Interviewer"
+  dimensions: {framing_and_stakeholder_fit: 1.0, question_quality_and_precision: 2.0, probing_and_follow_up_depth: 1.0, listening_interpretation_and_stewardship: 1.0}
+  sic:
+    t1: {pct: 0,    found: 0, total: 4, status: not_accessed_insufficient_framing}
+    t2: {pct: 0,    found: 0, total: 4, status: not_accessed_insufficient_framing}
+    t3: {pct: 0,    found: 0, total: 4, status: not_accessed_insufficient_framing}
+
+"2026-06-15_tom_good":
+  source_diagnostic: "Round 1/Interviews/Tom_Good_Interview Diagnostic_6.15.2026.docx"
+  overall: 8.8
+  skill_label: "Strong Interviewer"
+  dimensions: {framing_and_stakeholder_fit: 9.0, question_quality_and_precision: 8.5, probing_and_follow_up_depth: 9.0, listening_interpretation_and_stewardship: 8.0}
+  sic:
+    t1: {pct: 75,   found: 3, total: 4, status: partial}
+    t2: {pct: 100,  found: 4, total: 4, status: full}
+    t3: {pct: 92.5, found: 4, total: 4, status: partial}
+
+"2026-06-15_tom_bad":
+  source_diagnostic: "Round 1/Interviews/Tom_Bad_Interview Diagnostic_6.15.2026.docx"
+  overall: 2.5
+  skill_label: "Surface-Level Interviewer"
+  dimensions: {framing_and_stakeholder_fit: 2.0, question_quality_and_precision: 3.0, probing_and_follow_up_depth: 2.0, listening_interpretation_and_stewardship: 3.0}
+  sic:
+    t1: {pct: 50,   found: 2, total: 4, status: partial}
+    t2: {pct: 25,   found: 1, total: 4, status: partial}
+    t3: {pct: 0,    found: 0, total: 4, status: not_accessed_insufficient_framing}
+
+"2026-06-06_alex_good":
+  source_diagnostic: "Round 2/Interviews/Alex Good_Interview Diagnostic_6.6.2026.docx"
+  overall: 8.2
+  skill_label: "Strong Interviewer"
+  dimensions: {framing_and_stakeholder_fit: 8.0, question_quality_and_precision: 7.5, probing_and_follow_up_depth: 8.5, listening_interpretation_and_stewardship: 8.0}
+  sic:
+    t1: {pct: 60,   found: 3, total: 5, status: partial}
+    t2: {pct: 40,   found: 2, total: 5, status: partial}
+    t3: {pct: 56,   found: 4, total: 5, status: partial}
+
+"2026-06-06_alex_bad":
+  source_diagnostic: "Round 2/Interviews/Alex_Bad_Interview Diagnostic_6.6.2026.docx"
+  overall: 5.5
+  skill_label: "Developing Interviewer"
+  dimensions: {framing_and_stakeholder_fit: 5.0, question_quality_and_precision: 6.0, probing_and_follow_up_depth: 5.0, listening_interpretation_and_stewardship: 6.0}
+  sic:
+    t1: {pct: 60,   found: 3, total: 5, status: partial}
+    t2: {pct: 0,    found: 0, total: 5, status: not_accessed_insufficient_framing}
+    t3: {pct: 0,    found: 0, total: 5, status: not_accessed_insufficient_framing}
+
+"2026-06-06_mike_good":
+  source_diagnostic: "Round 2/Interviews/Mike_Good_Interview Diagnostic_6.6.2026.docx"
+  overall: 8.8
+  skill_label: "Strong Interviewer"
+  dimensions: {framing_and_stakeholder_fit: 8.5, question_quality_and_precision: 8.0, probing_and_follow_up_depth: 9.0, listening_interpretation_and_stewardship: 9.0}
+  sic:
+    t1: {pct: 100,  found: 3, total: 3, status: full}
+    t2: {pct: 75,   found: 3, total: 4, status: partial}
+    t3: {pct: 52.5, found: 3, total: 4, status: partial}
+
+"2026-06-06_mike_bad":
+  source_diagnostic: "Round 2/Interviews/Mike_Bad_Interview Diagnostic_6.6.2026.docx"
+  overall: 3.0
+  skill_label: "Developing Interviewer"
+  dimensions: {framing_and_stakeholder_fit: 3.0, question_quality_and_precision: 4.0, probing_and_follow_up_depth: 3.0, listening_interpretation_and_stewardship: 3.0}
+  sic:
+    t1: {pct: 100,  found: 3, total: 3, status: full}
+    t2: {pct: 0,    found: 0, total: 4, status: not_accessed_insufficient_framing}
+    t3: {pct: 0,    found: 0, total: 4, status: not_accessed_insufficient_framing}
+
+"2026-06-06_sarah_good":
+  source_diagnostic: "Round 2/Interviews/Sarah_Good_Interview Diagnostic_6.6.2026.docx"
+  overall: 8.5
+  skill_label: "Strong Interviewer"
+  dimensions: {framing_and_stakeholder_fit: 8.5, question_quality_and_precision: 7.5, probing_and_follow_up_depth: 9.0, listening_interpretation_and_stewardship: 8.0}
+  sic:
+    t1: {pct: 100,  found: 4, total: 4, status: full}
+    t2: {pct: 25,   found: 1, total: 4, status: partial}
+    t3: {pct: 50,   found: 2, total: 4, status: partial}
+
+"2026-06-06_sarah_bad":
+  source_diagnostic: "Round 2/Interviews/Sarah_Bad_Interview Diagnostic_6.6.2026.docx"
+  overall: 4.5
+  skill_label: "Developing Interviewer"
+  dimensions: {framing_and_stakeholder_fit: 4.0, question_quality_and_precision: 5.0, probing_and_follow_up_depth: 4.0, listening_interpretation_and_stewardship: 5.0}
+  sic:
+    t1: {pct: 50,   found: 2, total: 4, status: partial}
+    t2: {pct: 75,   found: 3, total: 4, status: partial}
+    t3: {pct: 35,   found: 2, total: 4, status: partial}
+
+"2026-06-06_tom_good":
+  source_diagnostic: "Round 2/Interviews/Tom_Good_Interview Diagnostic_6.6.2026.docx"
+  overall: 8.2
+  skill_label: "Strong Interviewer"
+  dimensions: {framing_and_stakeholder_fit: 8.0, question_quality_and_precision: 7.5, probing_and_follow_up_depth: 8.5, listening_interpretation_and_stewardship: 8.0}
+  sic:
+    t1: {pct: 100,  found: 4, total: 4, status: full}
+    t2: {pct: 100,  found: 4, total: 4, status: full}
+    t3: {pct: 100,  found: 4, total: 4, status: full}
+
+"2026-06-06_tom_bad":
+  source_diagnostic: "Round 2/Interviews/Tom_Bad_Interview Diagnostic_6.6.2026.docx"
+  overall: 3.5
+  skill_label: "Developing Interviewer"
+  dimensions: {framing_and_stakeholder_fit: 2.0, question_quality_and_precision: 5.0, probing_and_follow_up_depth: 4.0, listening_interpretation_and_stewardship: 3.0}
+  sic:
+    t1: {pct: 75,   found: 3, total: 4, status: partial}
+    t2: {pct: 0,    found: 0, total: 4, status: not_accessed_insufficient_framing}
+    t3: {pct: 0,    found: 0, total: 4, status: not_accessed_insufficient_framing}

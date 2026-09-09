@@ -14,6 +14,7 @@ dependencies = [
     "websockets>=12.0",
     "asyncpg>=0.29.0",
     "pgvector>=0.2.4",
+    "argon2-cffi>=23.1.0",
     "alembic>=1.13.0",
     "psycopg2-binary>=2.9.9",
     "sqlalchemy>=2.0.0",
@@ -31,6 +32,24 @@ dev = [
 ]
 scripts = [
     "python-docx>=1.1.0",
+    "pandas>=2.0",
+    "openpyxl>=3.1",
+    "PyYAML>=6.0",
+]
+# Dev-only analysis stack for backend/evals/. Not shipped: the wheel packages
+# only ["app"], so nothing here reaches production.
+evals = [
+    "pandas>=2.0",
+    "openpyxl>=3.1",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "scikit-learn>=1.4",
+    "pingouin>=0.5.4",
+    "statsmodels>=0.14",
+    "rapidfuzz>=3.6",
+    "tqdm>=4.66",
+    "tiktoken>=0.7",
+    "pyarrow>=15.0",
 ]
 
 [build-system]
@@ -54,7 +73,11 @@ select = ["E", "F", "I", "W"]
 "app/evaluation/multi_source_evaluator.py" = ["E501", "I001", "F401", "F841", "W293"]
 "app/personas/prompt_assembly.py" = ["E501"]
 "scripts/*.py" = ["E501", "I001", "F401", "F841", "W293", "W292"]
+"evals/**/*.py" = ["E501", "I001"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "llm: hits the OpenAI API and costs money; skipped unless RUN_LLM_EVALS=1",
+]
