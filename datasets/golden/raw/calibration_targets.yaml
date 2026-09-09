@@ -1,0 +1,156 @@
+# DERIVED calibration targets -- what the scores SHOULD have been, according to the grader's
+# written memos. These are NOT observed scores. Nobody recorded these numbers; they are read
+# out of the memo prose in docs/Trial Run/*/[June_8|June_15]_2026 SES Test Memo.docx.
+#
+# The observed scores live in diagnostic_scores.yaml and are not modified by this file.
+# Use these as tuning targets, never as ground truth.
+#
+# basis tells you how much the number is worth:
+#   memo_explicit    -- the memo states a number or a band for this interview. Trust it.
+#   memo_directional -- the memo says which way to move but gives no magnitude. The DIRECTION
+#                       is the grader's; the MAGNITUDE is interpolated and is the weakest part
+#                       of this file. Treat as a starting point, not a target to fit exactly.
+#   memo_endorsed    -- the memo affirms the score as-is. target == observed, deliberately.
+#   no_guidance      -- the memo says nothing about this interview. target == observed.
+#
+# Only fields the memo actually speaks to are set. Absent field = no change from observed.
+
+# ---------------------------------------------------------------------------------------
+# June 6 set -- reviewed in "Review of Interview Simulation (Round 2)", June 8 2026.
+# This is the round the memo makes concrete scoring claims about.
+# ---------------------------------------------------------------------------------------
+
+"2026-06-06_tom_good":
+  basis: memo_explicit
+  memo: "June_8_2026 SES Test Memo.docx -- A.1"
+  quote: >-
+    Tom's good interview remains the clearest mismatch: despite surfacing regulatory silence,
+    incentive alignment, policy lag, path dependency, future obligations, capital-shaped
+    priorities, and emergent system outcomes, the interview receives only an 8.2 IQR score,
+    which appears lower than the process quality demonstrated in the transcript. [...] Refine
+    the upper end of the IQR prompt so that interviews that surface full Tier 3 system logic
+    are scored in the high-8 to low-9 range or above, rather than being held in the low-8s.
+  target_overall: 8.8
+  rationale: >-
+    Observed 8.2. The memo names this interview specifically and gives an explicit band
+    ("high-8 to low-9 range or above"). 8.8 sits in that band. This interview is also the only
+    one in the corpus at 100% SIC on all three tiers, which is the condition the memo attaches
+    the band to ("interviews that surface full Tier 3 system logic").
+
+"2026-06-06_alex_good":
+  basis: memo_directional
+  memo: "June_8_2026 SES Test Memo.docx -- A.1"
+  quote: >-
+    The "good interviews" for Alex, Mike, and Sarah are scored reasonably well, but still
+    somewhat conservatively.
+  target_overall: 8.5
+  rationale: >-
+    Observed 8.2. Direction (up) is the grader's; magnitude is interpolated. Held to a modest
+    +0.3 because the memo calls these "reasonably well" scored and reserves the real complaint
+    for Tom. Alex's SIC is the weakest of the four good interviews (60/40/56), so this one is
+    nudged least among the three.
+
+"2026-06-06_mike_good":
+  basis: memo_directional
+  memo: "June_8_2026 SES Test Memo.docx -- A.1"
+  quote: >-
+    The "good interviews" for Alex, Mike, and Sarah are scored reasonably well, but still
+    somewhat conservatively.
+  target_overall: 9.0
+  rationale: >-
+    Observed 8.8. Direction is the grader's; magnitude interpolated. Already high-8, so a small
+    +0.2 lift is all the memo language supports.
+
+"2026-06-06_sarah_good":
+  basis: memo_directional
+  memo: "June_8_2026 SES Test Memo.docx -- A.1"
+  quote: >-
+    The "good interviews" for Alex, Mike, and Sarah are scored reasonably well, but still
+    somewhat conservatively.
+  target_overall: 8.8
+  rationale: >-
+    Observed 8.5. Direction is the grader's; magnitude interpolated (+0.3).
+
+"2026-06-06_sarah_bad":
+  basis: memo_directional
+  memo: "June_8_2026 SES Test Memo.docx -- A.2"
+  quote: >-
+    in Sarah's bad interview, Tier 2 and Tier 3 appear to receive meaningful credit even though
+    the deeper threshold and fragility content was mostly volunteered by Sarah and not really
+    developed by the student. [...] Strengthen SIC logic so that Tier 2 and Tier 3 cue counts
+    are discounted when the interviewer does not follow up on volunteered insight. Content
+    appearing in the transcript should not, by itself, count as access.
+  target_sic_t2_pct: 25
+  target_sic_t2_found: 1
+  target_sic_t3_pct: 0
+  target_sic_t3_found: 0
+  rationale: >-
+    Observed T2 75% (3/4), T3 35% (2/4). The memo says the credit is wrong because the content
+    was volunteered and undeveloped, and asks for those cues to be discounted. Applying that
+    rule strictly drops T3 to zero (both its cues were indirect-credit on volunteered content)
+    and leaves T2 with one cue. The direction and the reasoning are the grader's; the exact
+    residual counts are interpolated -- confirming them needs a per-cue pass over the transcript,
+    which this dataset deliberately does not carry.
+  overall_unchanged_because: >-
+    The memo faults the SIC credit here, not the IQR. Observed 4.5 stands.
+
+"2026-06-06_mike_bad":
+  basis: memo_directional
+  memo: "June_8_2026 SES Test Memo.docx -- A.2"
+  quote: >-
+    in Mike's bad interview, Tier 1 is marked full largely because Mike volunteered strong
+    baseline observations without much interviewer development.
+  target_sic_t1_pct: 33.3
+  target_sic_t1_found: 1
+  target_sic_t1_status: partial
+  rationale: >-
+    Observed T1 100% (3/3, full) on an interview scored 3.0 overall. The memo names this as
+    over-credit for volunteered content. Dropping to 1 of 3 removes the two cues the memo
+    describes as undeveloped. Direction is the grader's; the residual count is interpolated.
+  overall_unchanged_because: >-
+    The memo faults the SIC credit here, not the IQR. Observed 3.0 stands.
+
+"2026-06-06_alex_bad":
+  basis: no_guidance
+  rationale: The June 8 memo makes no scoring claim about this interview. Observed scores stand.
+
+"2026-06-06_tom_bad":
+  basis: no_guidance
+  rationale: The June 8 memo makes no scoring claim about this interview. Observed scores stand.
+
+# ---------------------------------------------------------------------------------------
+# June 15 set -- reviewed in "Review of Interview Simulation (Round 3)", June 15 2026.
+#
+# The grader explicitly declines a scoring change for this round, so every target here equals
+# the observed score. Note also that the memo's "capped around an 8.2" remark does not match
+# this round's good interviews (8.8, 9.0, 9.0, 8.8) -- 8.2 was the June 6 ceiling. Read that
+# sentence as the grader recalling the earlier round, and do not tune against it.
+# ---------------------------------------------------------------------------------------
+
+"2026-06-15_alex_good": &june15_good
+  basis: memo_endorsed
+  memo: "June_15_2026 SES Test Memo.docx -- Grading Observation 1"
+  quote: >-
+    While an 8.2 is still a strong grade, it is worth keeping an eye on this top-end scoring.
+    We don't necessarily need to change the grading math right now, but we should watch whether
+    the simulator is being slightly too conservative when rewarding exceptional interviews.
+  rationale: >-
+    The grader explicitly declines a change ("don't necessarily need to change the grading math
+    right now") and flags top-end conservatism only as something to watch. Observed scores stand.
+
+"2026-06-15_mike_good": *june15_good
+"2026-06-15_sarah_good": *june15_good
+"2026-06-15_tom_good": *june15_good
+
+"2026-06-15_alex_bad": &june15_bad
+  basis: memo_endorsed
+  memo: "June_15_2026 SES Test Memo.docx -- opening"
+  quote: >-
+    the simulator does an excellent job of giving low scores to bad interviews and recognizing
+    when a student goes off the rails
+  rationale: >-
+    The grader affirms the low end of this round. Observed scores stand.
+
+"2026-06-15_mike_bad": *june15_bad
+"2026-06-15_sarah_bad": *june15_bad
+"2026-06-15_tom_bad": *june15_bad

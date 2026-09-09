@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 from typing import Annotated, Any
 from uuid import UUID
@@ -62,6 +63,9 @@ SCORER_METADATA = {
     "sic_model": "gpt-4o",
     "sic_fallback_model": "gpt-4o-mini",
     "scorer_version": "1.0",
+    # Set by the deployment (see deploy/). "unknown" locally, which is honest:
+    # a row that cannot name the code that produced it should say so.
+    "git_sha": os.getenv("GIT_SHA", "unknown"),
 }
 
 
@@ -103,7 +107,9 @@ def _parse_metadata(raw) -> dict:
     return raw or {}
 
 
-async def _persist_evaluation(session_id: UUID, payload: dict[str, Any]) -> None:
+async def _persist_evaluation(
+    session_id: UUID, payload: dict[str, Any], scorer_metadata: dict[str, Any] | None = None
+) -> None:
     """Insert one row per evaluation run. Failures are logged but never raised —
     a DB write should not break the user-visible score.
 
@@ -120,7 +126,7 @@ async def _persist_evaluation(session_id: UUID, payload: dict[str, Any]) -> None
                 """,
                 session_id,
                 json.dumps(payload),
-                json.dumps(SCORER_METADATA),
+                json.dumps(scorer_metadata or SCORER_METADATA),
             )
     except Exception as e:
         logger.warning(f"failed to persist evaluation for session {session_id}: {e}")
@@ -179,7 +185,21 @@ async def eval_iqr(session_id: UUID, user: Annotated[CurrentUser, Depends(requir
     else:
         payload["insight_coverage"] = sic_result if isinstance(sic_result, list) else []
 
-    await _persist_evaluation(session_id, payload)
+    await _persist_evaluation(
+        session_id,
+        payload,
+        {
+            **SCORER_METADATA,
+            # Read off the scorers rather than hardcoded, so bumping a default
+            # prompt path to v3 cannot leave these rows claiming v2.
+            "iqr_prompt_version": iqr_scorer.prompt_version,
+            "sic_prompt_version": sic_scorer.prompt_version,
+            # Which model actually graded this run — the scorers downgrade to
+            # the fallback on error, and that has to be visible afterwards.
+            "iqr_model_used": iqr_scorer.last_model_used,
+            "sic_model_used": sic_scorer.last_model_used,
+        },
+    )
     return payload
 
 

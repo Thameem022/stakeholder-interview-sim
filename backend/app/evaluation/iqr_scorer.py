@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -63,11 +63,11 @@ def _load_strong_interview_motifs(persona_id: str) -> list[str]:
         return []
 
 
-def _build_llm() -> BaseChatModel:
+def _build_llm(model: str = "gpt-4o", temperature: float = 0.0) -> BaseChatModel:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY environment variable is required for IQR scoring.")
-    return ChatOpenAI(model="gpt-4o", temperature=0.0, api_key=api_key)
+    return ChatOpenAI(model=model, temperature=temperature, api_key=api_key)
 
 
 class IQRScorer:
@@ -78,14 +78,35 @@ class IQRScorer:
     structured SessionEvaluation outputs from an input Transcript.
     """
 
-    def __init__(self, prompt_path: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        prompt_path: Optional[str] = None,
+        model: str = "gpt-4o",
+        fallback_model: str = "gpt-4o-mini",
+        allow_fallback: bool = True,
+        temperature: float = 0.0,
+    ) -> None:
         self._prompt_path = Path(prompt_path) if prompt_path else DEFAULT_PROMPT_PATH
         if not self._prompt_path.is_file():
             raise FileNotFoundError(f"IQR system prompt not found at: {self._prompt_path}")
         self._system_prompt = self._prompt_path.read_text(encoding="utf-8")
-        self._llm = _build_llm()
+        self._model = model
+        self._fallback_model = fallback_model
+        # Evaluation runs set this False: a silent downgrade to the fallback model
+        # would otherwise be recorded as a measurement of the primary one.
+        self._allow_fallback = allow_fallback
+        self._temperature = temperature
+        self._llm = _build_llm(model, temperature)
         self._parser = PydanticOutputParser(pydantic_object=SessionEvaluation)
         self._chain = self._build_chain(self._llm)
+        # Set by evaluate(); None until the first call.
+        self.last_model_used: Optional[str] = None
+        self.last_error: Optional[str] = None
+
+    @property
+    def prompt_version(self) -> str:
+        """Version directory the active system prompt was loaded from, e.g. "v2"."""
+        return self._prompt_path.parent.name
 
     def _build_chain(self, llm: BaseChatModel):
         prompt = ChatPromptTemplate.from_messages(
@@ -106,7 +127,11 @@ class IQRScorer:
         )
         return prompt | llm | self._parser
 
-    async def evaluate(self, transcript: Transcript) -> SessionEvaluation:
+    async def evaluate(self, transcript: Transcript, config: Optional[dict] = None) -> SessionEvaluation:
+        # Reset per call so an inspecting caller never reads a previous run's values.
+        self.last_model_used = None
+        self.last_error = None
+
         if not transcript.turns:
             base_metadata = dict(transcript.metadata or {})
             base_metadata["status"] = "Incomplete"
@@ -151,19 +176,25 @@ class IQRScorer:
             "transcript_json": transcript_json,
         }
 
+        self.last_model_used = self._model
         try:
-            result: SessionEvaluation = await self._chain.ainvoke(chain_input)
-        except Exception:
-            # Fallback: retry with gpt-4o-mini for reliability
-            fallback_llm = ChatOpenAI(
-                model="gpt-4o-mini",
-                temperature=0.0,
-                api_key=os.getenv("OPENAI_API_KEY"),
-            )
-            fallback_chain = self._build_chain(fallback_llm)
-            result = await fallback_chain.ainvoke(chain_input)
+            result: SessionEvaluation = await self._chain.ainvoke(chain_input, config=config)
+        except Exception as e:
+            # Record what went wrong before deciding whether to retry — an
+            # unrecorded downgrade makes the run unattributable afterwards.
+            self.last_error = f"{type(e).__name__}: {e}"
+            if not self._allow_fallback:
+                raise
+            fallback_chain = self._build_chain(_build_llm(self._fallback_model, self._temperature))
+            result = await fallback_chain.ainvoke(chain_input, config=config)
+            self.last_model_used = self._fallback_model
 
-        result.metadata = {**base_metadata, **result.metadata}
+        result.metadata = {
+            **base_metadata,
+            **result.metadata,
+            "judge_model": self.last_model_used,
+            "prompt_version": self.prompt_version,
+        }
         return result
 
 

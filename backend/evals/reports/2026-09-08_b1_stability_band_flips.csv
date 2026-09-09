@@ -1,0 +1,17 @@
+transcript_id,quality,mean_score,sd,n_bands,bands,n_raw_labels,raw_labels
+2026-06-15_sarah_bad,bad,1.3666666666666667,0.22886885410853175,1,Weak,1,Weak Interviewer
+2026-06-06_mike_bad,bad,3.1333333333333333,0.22886885410853172,1,Developing,1,Developing Interviewer
+2026-06-15_mike_bad,bad,2.1,0.20701966780270625,1,Weak,2,Surface-Level Interviewer | Weak Interviewer
+2026-06-06_alex_good,good,8.859999999999998,0.20283702113484395,2,Exemplary/Strong,1,Strong Interviewer
+2026-06-15_alex_bad,bad,2.0,0.1889822365046136,1,Weak,1,Weak Interviewer
+2026-06-06_tom_bad,bad,3.433333333333333,0.1759328876372492,1,Developing,1,Developing Interviewer
+2026-06-06_sarah_bad,bad,3.533333333333333,0.12909944487358055,1,Developing,1,Developing Interviewer
+2026-06-06_alex_bad,bad,4.54,0.10555973258234946,1,Developing,1,Developing Interviewer
+2026-06-06_sarah_good,good,8.946666666666665,0.0833809387832789,1,Exemplary,1,Strong Interviewer
+2026-06-06_mike_good,good,9.0,0.0,1,Exemplary,1,Strong Interviewer
+2026-06-06_tom_good,good,8.5,0.0,1,Strong,1,Strong Interviewer
+2026-06-15_alex_good,good,9.0,0.0,1,Exemplary,1,Strong Interviewer
+2026-06-15_mike_good,good,9.0,0.0,1,Exemplary,1,Strong Interviewer
+2026-06-15_sarah_good,good,8.8,0.0,1,Exemplary,2,Strong Interviewer | Strong Operational Interviewer
+2026-06-15_tom_bad,bad,2.5,0.0,1,Weak,2,Developing Interviewer | Weak Interviewer
+2026-06-15_tom_good,good,8.8,0.0,1,Exemplary,1,Strong Interviewer
