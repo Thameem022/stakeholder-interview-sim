@@ -12,13 +12,14 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
-from uuid import UUID, uuid4
+from typing import Annotated, Any, Dict, Optional
+from uuid import uuid4
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from app.auth.dependencies import CurrentUser, rate_limited, require_user
 from app.config import settings
 from app.personas.prompt_assembly import build_persona_system_prompt
 from app.personas.voices import VOICE_MAP
@@ -29,6 +30,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 OPENAI_CLIENT_SECRETS_URL = "https://api.openai.com/v1/realtime/client_secrets"
+
+# Each mint is a credential good for a whole realtime session — the highest
+# cost per call in the app. One interview needs one; the headroom absorbs
+# dropped connections and microphone-permission retries.
+_TOKEN_LIMIT = ("realtime-token", 30, 3600)
 
 RETRIEVE_TOOL: Dict[str, Any] = {
     "type": "function",
@@ -55,7 +61,12 @@ RETRIEVE_TOOL: Dict[str, Any] = {
 class TokenRequest(BaseModel):
     persona_id: str
     voice_id: Optional[str] = None
-    session_id: Optional[str] = None
+    # There is deliberately no `session_id` here. It used to be accepted and
+    # fed straight into an upsert, so passing someone else's id wiped their
+    # transcript. No client has ever sent it, so the field is simply gone
+    # rather than guarded; Pydantic ignores unknown fields, so a stale bundle
+    # sending one is a no-op rather than a 422.
+    #
     # TODO(remove after one release cycle): legacy field kept so cached
     # frontend bundles don't 422 mid-rollout. The simulator now always runs
     # in no-barge-in mode regardless of this value.
@@ -109,18 +120,32 @@ def _build_session_config(persona_id: str, voice_id: str) -> Dict[str, Any]:
     }
 
 
-@router.post("/realtime/token", response_model=TokenResponse)
-async def mint_token(req: TokenRequest) -> TokenResponse:
+@router.post(
+    "/realtime/token",
+    response_model=TokenResponse,
+    dependencies=[Depends(rate_limited(*_TOKEN_LIMIT))],
+)
+async def mint_token(
+    req: TokenRequest, user: Annotated[CurrentUser, Depends(require_user)]
+) -> TokenResponse:
     if not req.persona_id:
         raise HTTPException(status_code=400, detail="persona_id required")
 
-    try:
-        sid = UUID(req.session_id) if req.session_id else uuid4()
-    except ValueError:
-        sid = uuid4()
-
+    sid = uuid4()
     voice_id = req.voice_id or VOICE_MAP.get(req.persona_id, "alloy")
     session_config = _build_session_config(req.persona_id, voice_id)
+
+    # The session row is written before the OpenAI call, not after: an ephemeral
+    # key is billable, so it should not be minted for a request that is about to
+    # fail on our side.
+    session = InterviewSession(
+        id=sid,
+        user_id=user.id,
+        persona_id=req.persona_id,
+        voice_id=voice_id,
+        started_at=datetime.utcnow(),
+    )
+    await session.create()
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         try:
@@ -151,16 +176,8 @@ async def mint_token(req: TokenRequest) -> TokenResponse:
         logger.error(f"openai client_secrets missing 'value': {data}")
         raise HTTPException(status_code=502, detail="openai response missing ephemeral key")
 
-    session = InterviewSession(
-        id=sid,
-        persona_id=req.persona_id,
-        voice_id=voice_id,
-        started_at=datetime.utcnow(),
-    )
-    await session.persist()
-
     logger.info(
-        f"minted ephemeral key for session={sid} persona={req.persona_id}"
+        f"minted ephemeral key for session={sid} persona={req.persona_id} user={user.id}"
     )
     return TokenResponse(
         ephemeral_key=ephemeral_key,

@@ -1,0 +1,16 @@
+metric,stratum,n_transcripts,icc_1_1,ci_low,ci_high,icc_1_k
+framing_and_stakeholder_fit,pooled,16,0.9994319725246373,1.0,1.0,0.999962111414669
+framing_and_stakeholder_fit,good only,8,0.7999999999999993,0.62,0.94,0.9836065573770492
+framing_and_stakeholder_fit,bad only,8,0.9939939939939938,0.99,1.0,0.9995973424602376
+listening_interpretation_and_stewardship,pooled,16,0.9963049689213295,0.99,1.0,0.9997528121189796
+listening_interpretation_and_stewardship,good only,8,0.9054945054945056,0.8,0.98,0.993090149445605
+listening_interpretation_and_stewardship,bad only,8,0.9615776822783888,0.91,0.99,0.9973432384789725
+overall,pooled,16,0.9982289247750963,1.0,1.0,0.9998817328222759
+overall,good only,8,0.8263172375842611,0.66,0.95,0.9861810420315236
+overall,bad only,8,0.9719218406547885,0.93,0.99,0.998077747622328
+probing_and_follow_up_depth,pooled,16,0.9968299874731674,0.99,1.0,0.9997880387062519
+probing_and_follow_up_depth,good only,8,-5.273559366969493e-16,-0.04,0.18,-7.910339050454297e-15
+probing_and_follow_up_depth,bad only,8,0.944288583543214,0.88,0.99,0.9960821899381221
+question_quality_and_precision,pooled,16,0.997224995308392,0.99,1.0,0.9998145192913787
+question_quality_and_precision,good only,8,0.7999999999999993,0.62,0.94,0.9836065573770492
+question_quality_and_precision,bad only,8,0.9747574482699406,0.94,0.99,0.9982765594499058

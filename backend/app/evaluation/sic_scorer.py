@@ -157,6 +157,14 @@ def _compute_status_for_tier(
 
 # ── SICScorer ────────────────────────────────────────────────────────────────
 
+
+def _build_llm(model: str = "gpt-4o", temperature: float = 0.0) -> ChatOpenAI:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY environment variable is required for SIC scoring.")
+    return ChatOpenAI(model=model, temperature=temperature, api_key=api_key)
+
+
 class SICScorer:
     """
     Grades an interview transcript against a persona's SIC key and returns
@@ -172,15 +180,33 @@ class SICScorer:
     extractive suggested_follow_ups from becoming actionable tips.
     """
 
-    def __init__(self, prompt_path: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        prompt_path: Optional[str] = None,
+        model: str = "gpt-4o",
+        fallback_model: str = "gpt-4o-mini",
+        allow_fallback: bool = True,
+        temperature: float = 0.0,
+    ) -> None:
         self._prompt_path = Path(prompt_path) if prompt_path else DEFAULT_SIC_PROMPT_PATH
         if not self._prompt_path.is_file():
             raise FileNotFoundError(f"SIC system prompt not found at: {self._prompt_path}")
         self._system_prompt = self._prompt_path.read_text(encoding="utf-8")
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError("OPENAI_API_KEY environment variable is required for SIC scoring.")
-        self._llm = ChatOpenAI(model="gpt-4o", temperature=0.0, api_key=api_key)
+        self._model = model
+        self._fallback_model = fallback_model
+        # Evaluation runs set this False: a silent downgrade to the fallback model
+        # would otherwise be recorded as a measurement of the primary one.
+        self._allow_fallback = allow_fallback
+        self._temperature = temperature
+        self._llm = _build_llm(model, temperature)
+        # Set by grade_raw()/evaluate(); None until the first call.
+        self.last_model_used: Optional[str] = None
+        self.last_error: Optional[str] = None
+
+    @property
+    def prompt_version(self) -> str:
+        """Version directory the active system prompt was loaded from, e.g. "v2"."""
+        return self._prompt_path.parent.name
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -330,7 +356,61 @@ class SICScorer:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    async def evaluate(self, persona_id: str, turns: List[dict]) -> List[dict]:
+    async def _grade(
+        self, sic_key: dict, turns: List[dict], config: Optional[dict] = None
+    ) -> SICGradingResult:
+        """One LLM call: item grades for an already-loaded SIC key.
+
+        Split out of evaluate() so callers that want the raw per-item labels do
+        not also pay for the cosmetic enrichment call at the end of evaluate().
+        """
+        self.last_model_used = None
+        self.last_error = None
+
+        catalog: List[dict] = sic_key.get("sic_catalog", [])
+        if not catalog:
+            return SICGradingResult(grades=[])
+
+        rubric_text = self._build_rubric_text(
+            catalog,
+            sic_key.get("omission_policy"),
+            persona_name=sic_key.get("persona_name"),
+            persona_archetype=sic_key.get("archetype"),
+            grading_rules=sic_key.get("grading_rules"),
+        )
+        chain_input = {
+            "system_prompt": self._system_prompt,
+            "transcript": self._format_transcript(turns),
+            "rubric": rubric_text,
+        }
+
+        self.last_model_used = self._model
+        try:
+            return await self._build_chain(self._llm).ainvoke(chain_input, config=config)
+        except Exception as e:
+            # Record what went wrong before deciding whether to retry — an
+            # unrecorded downgrade makes the run unattributable afterwards.
+            self.last_error = f"{type(e).__name__}: {e}"
+            if not self._allow_fallback:
+                raise
+            fallback_chain = self._build_chain(_build_llm(self._fallback_model, self._temperature))
+            result = await fallback_chain.ainvoke(chain_input, config=config)
+            self.last_model_used = self._fallback_model
+            return result
+
+    async def grade_raw(
+        self, persona_id: str, turns: List[dict], config: Optional[dict] = None
+    ) -> SICGradingResult:
+        """Per-item LLM grades only — no tier arithmetic, no enrichment call.
+
+        This is what evaluation runs want: the labels the statistics are computed
+        from, without the second LLM call evaluate() makes for display text.
+        """
+        return await self._grade(self._load_sic_key(persona_id), turns, config=config)
+
+    async def evaluate(
+        self, persona_id: str, turns: List[dict], config: Optional[dict] = None
+    ) -> List[dict]:
         """
         Grade the transcript turns against the SIC key for persona_id.
 
@@ -341,42 +421,11 @@ class SICScorer:
         sic_key = self._load_sic_key(persona_id)
         catalog: List[dict] = sic_key.get("sic_catalog", [])
         tier_metadata: dict = sic_key.get("tier_metadata", {})
-        omission_policy: Optional[dict] = sic_key.get("omission_policy")
-        grading_rules: Optional[dict] = sic_key.get("grading_rules")
-        do_not_reward = set((omission_policy or {}).get("do_not_reward", []))
-        persona_name: Optional[str] = sic_key.get("persona_name")
-        persona_archetype: Optional[str] = sic_key.get("archetype")
 
         if not catalog:
             return []
 
-        rubric_text = self._build_rubric_text(
-            catalog,
-            omission_policy,
-            persona_name=persona_name,
-            persona_archetype=persona_archetype,
-            grading_rules=grading_rules,
-        )
-        transcript_text = self._format_transcript(turns)
-
-        chain = self._build_chain(self._llm)
-        chain_input = {
-            "system_prompt": self._system_prompt,
-            "transcript": transcript_text,
-            "rubric": rubric_text,
-        }
-
-        try:
-            result: SICGradingResult = await chain.ainvoke(chain_input)
-        except Exception:
-            # Fallback to gpt-4o-mini if primary call fails
-            fallback_llm = ChatOpenAI(
-                model="gpt-4o-mini",
-                temperature=0.0,
-                api_key=os.getenv("OPENAI_API_KEY"),
-            )
-            fallback_chain = self._build_chain(fallback_llm)
-            result = await fallback_chain.ainvoke(chain_input)
+        result: SICGradingResult = await self._grade(sic_key, turns, config=config)
 
         grades_by_id: Dict[str, SICItemGrade] = {g.chunk_id: g for g in result.grades}
 

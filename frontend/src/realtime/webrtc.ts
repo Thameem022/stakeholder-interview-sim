@@ -20,7 +20,19 @@ export interface RealtimeCallbacks {
   onAssistantDone?: (final: string) => void
   onAssistantSpeakingChange?: (speaking: boolean) => void
   onError?: (message: string) => void
+  /**
+   * The session's own credentials stopped working mid-interview.
+   *
+   * Raised instead of letting the global interceptor redirect, so the owner
+   * can shut the connection down — and with it the microphone — before the
+   * route changes.
+   */
+  onAuthExpired?: () => void
 }
+
+/** True when a background call failed because the session is no longer valid. */
+const isAuthExpiry = (e: unknown): boolean =>
+  (e as { response?: { status?: number } })?.response?.status === 401
 
 export interface ConnectOptions {
   personaId: string
@@ -292,7 +304,9 @@ export class RealtimeWebRTCSession {
           if (isHallucination) break
           cb.onUserTranscript?.(text)
           if (this.sessionId) {
-            void postTranscript(this.sessionId, 'user', text).catch(() => {})
+            void postTranscript(this.sessionId, 'user', text).catch((e) => {
+              if (isAuthExpiry(e)) cb.onAuthExpired?.()
+            })
           }
         }
         break
@@ -329,7 +343,9 @@ export class RealtimeWebRTCSession {
         if (final) {
           cb.onAssistantDone?.(final)
           if (this.sessionId) {
-            void postTranscript(this.sessionId, 'assistant', final).catch(() => {})
+            void postTranscript(this.sessionId, 'assistant', final).catch((e) => {
+              if (isAuthExpiry(e)) cb.onAuthExpired?.()
+            })
           }
         }
         // response.done fires when the model finishes generating, not when the
@@ -395,9 +411,10 @@ export class RealtimeWebRTCSession {
       return
     }
     try {
-      const { text } = await postRetrieve(this.personaId, query)
+      const { text } = await postRetrieve(this.personaId, query, this.sessionId)
       this.sendToolOutput(callId, text)
     } catch (e: any) {
+      if (isAuthExpiry(e)) cb.onAuthExpired?.()
       cb.onError?.(`retrieve failed: ${e?.message ?? String(e)}`)
       this.sendToolOutput(callId, '(retrieval failed)')
     }

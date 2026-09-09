@@ -1,0 +1,5 @@
+model,scorer,calls,succeeded,failed,success_rate,dominant_failure
+gpt-4o,iqr,240,240,0,1.0,
+gpt-4o,sic,240,240,0,1.0,
+gpt-4o-mini,iqr,240,7,233,0.029166666666666667,OutputParserException: F
+gpt-4o-mini,sic,240,240,0,1.0,

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { RealtimeWebRTCSession } from '../realtime/webrtc'
 
 export type SessionStatus = 'idle' | 'connecting' | 'live' | 'ending'
@@ -6,6 +6,8 @@ export type SessionStatus = 'idle' | 'connecting' | 'live' | 'ending'
 export interface UseRealtimeSessionOptions {
   personaId: string
   voiceId?: string
+  /** Called after the connection is torn down because the login session died. */
+  onAuthExpired?: () => void
 }
 
 export interface RealtimeSession {
@@ -34,12 +36,28 @@ export function useRealtimeSession(opts: UseRealtimeSessionOptions): RealtimeSes
 
   const sessionRef = useRef<RealtimeWebRTCSession | null>(null)
 
+  // Held in a ref so an inline callback from the caller doesn't re-create
+  // `start` on every render.
+  const onAuthExpiredRef = useRef(opts.onAuthExpired)
+  onAuthExpiredRef.current = opts.onAuthExpired
+
   const cleanup = useCallback(() => {
     sessionRef.current?.disconnect()
     sessionRef.current = null
     setAnalyser(null)
     setRemoteStream(null)
     setIsAssistantSpeaking(false)
+  }, [])
+
+  // Tear the connection down if this component ever goes away with a session
+  // still open — which route guards and the 401 redirect can now cause. Without
+  // it the RTCPeerConnection outlives the route and the microphone stays live
+  // after the user has visibly left the interview.
+  useEffect(() => {
+    return () => {
+      sessionRef.current?.disconnect()
+      sessionRef.current = null
+    }
   }, [])
 
   const end = useCallback(() => {
@@ -82,6 +100,15 @@ export function useRealtimeSession(opts: UseRealtimeSessionOptions): RealtimeSes
           },
           onAssistantSpeakingChange: (speaking) => setIsAssistantSpeaking(speaking),
           onError: (msg) => setError(msg),
+          onAuthExpired: () => {
+            // Stop the connection (and the microphone) first, then let the
+            // app redirect. The other order leaves a live mic on a route the
+            // user can no longer see.
+            cleanup()
+            setStatus('idle')
+            setError('Your session ended. Please sign in again.')
+            onAuthExpiredRef.current?.()
+          },
         },
       })
       setAnalyser(sess.analyserNode)
