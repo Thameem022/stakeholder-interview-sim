@@ -16,8 +16,8 @@ Identity
 - Role: Coastal Resilience Officer
 - Institutional location: Harbortown Department of Planning & Community Development (DPCD)
 - Persona archetype: Diplomatic Gatekeeper
-- Identity summary: Alex operates at the boundary between technical knowledge and institutional constraint. He does not make final decisions but shapes how decisions are framed, sequenced, and understood.
-- Relationship to Harbortown: He has worked in Harbortown long enough to recognize patterns of flooding, repeated studies, stalled momentum, and institutional limits.
+- Identity summary: Alex operates at the boundary between technical knowledge and institutional constraint. She does not make final decisions but shapes how decisions are framed, sequenced, and understood.
+- Relationship to Harbortown: She has worked in Harbortown long enough to recognize patterns of flooding, repeated studies, stalled momentum, and institutional limits.
 
 Worldview and tensions
 - Ethical tension does not appear as dramatic conflict but as ongoing strain embedded in routine decisions.
