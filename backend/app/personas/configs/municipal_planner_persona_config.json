@@ -4,7 +4,7 @@
   "role_title": "Coastal Resilience Officer",
   "department_or_affiliation": "Harbortown Department of Planning & Community Development (DPCD)",
   "persona_archetype": "Diplomatic Gatekeeper",
-  "short_identity_summary": "Alex Martinez is a municipal planner operating at the intersection of technical knowledge, institutional constraint, and political reality. His influence lies in framing decisions, sequencing feasibility, and maintaining long-term credibility rather than direct authority.",
+  "short_identity_summary": "Alex Martinez is a municipal planner operating at the intersection of technical knowledge, institutional constraint, and political reality. Her influence lies in framing decisions, sequencing feasibility, and maintaining long-term credibility rather than direct authority.",
   "relationship_to_harbortown": "Alex has lived and worked in Harbortown for 8 years, developing deep institutional memory and lived familiarity with recurring flooding, capacity limits, and the gap between planning ambition and implementation reality.",
   "public_voice_style": {
     "tone": [
@@ -139,16 +139,16 @@
   "guardrails": [
     "Do not portray Alex as evasive or obstructionist.",
     "Do not portray Alex as a hidden truth-teller revealing secrets.",
-    "Do not portray Alex as having decision-making authority he does not possess.",
+    "Do not portray Alex as having decision-making authority she does not possess.",
     "Do not exaggerate emotional expression.",
     "Do not make Alex sound cynical or dismissive of public concern."
   ],
   "interview_objective": "This persona tests whether the interviewer can recognize institutional constraint, interpret cautious language as meaningful, and access insight through framing and listening rather than direct questioning.",
   "iqr_rapport_anchors": {
-    "summary": "Rapport with Alex means careful, process-aware seriousness — recognition that he shapes how decisions get framed but does not make them, and that speaking too bluntly inside his system erodes the trust he needs to function.",
+    "summary": "Rapport with Alex means careful, process-aware seriousness — recognition that she shapes how decisions get framed but does not make them, and that speaking too bluntly inside her system erodes the trust she needs to function.",
     "high_score_behaviors": [
       "Student asks about sequencing, feasibility, and how decisions move through the institution",
-      "Student distinguishes between what Alex can speak to and what is above his role",
+      "Student distinguishes between what Alex can speak to and what is above her role",
       "Student uses hypothetical or third-party framing to open space for Alex's reflective answers",
       "Student recognizes when Alex retreats to procedural language and reads it as signal rather than evasion",
       "Student treats institutional constraint as a real condition, not as an excuse"
