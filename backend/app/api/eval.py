@@ -57,6 +57,97 @@ def sanitize_transcript(turns: list[dict]) -> list[dict]:
     return cleaned
 
 
+
+# Proper nouns the speech-to-text layer reliably mangles. Applied to DISPLAYED
+# text only, never to what the scorers see: the rubrics already instruct the
+# judges to ignore transcription artefacts, and rewriting the scored transcript
+# would change what is being graded. This only stops a student's own quote
+# coming back to them misspelled.
+_PROPER_NOUN_FIXES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\bthe University of at the Worcester Polytechnic Institute\b", re.I),
+     "Worcester Polytechnic Institute"),
+    (re.compile(r"\bUniversity of at the Worcester Polytechnic Institute\b", re.I),
+     "Worcester Polytechnic Institute"),
+    (re.compile(r"\bHar(?:vard|bour|bor)[\s-]?Town\b"), "Harbortown"),
+    (re.compile(r"\bEast Har(?:vard|bour|bor)[\s-]?Town\b"), "East Harbor"),
+)
+
+
+def normalize_display_text(text: str | None) -> str | None:
+    """Fix obvious proper-noun transcription errors for display.
+
+    Display only. Scoring keeps ignoring artefacts; this never touches the
+    transcript the judges receive.
+    """
+    if not text:
+        return text
+    for pattern, replacement in _PROPER_NOUN_FIXES:
+        text = pattern.sub(replacement, text)
+    return text
+
+
+def _normalize_payload_for_display(payload: dict[str, Any]) -> None:
+    """Apply proper-noun normalisation to every string a student reads."""
+    for moment in payload.get("moments") or []:
+        for field in ("student_quote", "persona_offered", "what_it_produced", "outcome", "headline"):
+            if moment.get(field):
+                moment[field] = normalize_display_text(moment[field])
+    for tier in payload.get("insight_coverage") or []:
+        for item in tier.get("items") or []:
+            if item.get("evidence_quote"):
+                item["evidence_quote"] = normalize_display_text(item["evidence_quote"])
+    for turn in (payload.get("metadata") or {}).get("turns") or []:
+        turn["text"] = normalize_display_text(turn.get("text"))
+
+
+def _item_display_state(item: dict[str, Any]) -> str:
+    """Earned / opened / not_opened, mirroring the frontend's state model."""
+    if item.get("elicited") and item.get("earned_mode") == "earned":
+        if item.get("credit_mode") in ("explicit", "explicit_acknowledgment"):
+            return "earned"
+        return "opened"
+    if (
+        not item.get("elicited")
+        and item.get("type") == "signal"
+        and item.get("omission_classification") == "appropriate_non_disclosure"
+    ):
+        return "opened"
+    return "not_opened"
+
+
+def _reconcile_moments_with_coverage(payload: dict[str, Any]) -> None:
+    """Resolve each moment's cited knowledge item against its real grade.
+
+    IQR and SIC are scored in parallel, so the judge writing the moments cannot
+    know what the coverage grader decided. It names an item; this resolves that
+    name to the state the other tab will show, and the report renders the verb
+    from the state. Without this the two tabs are free to contradict each other
+    on the same item.
+    """
+    states: dict[str, str] = {}
+    for tier in payload.get("insight_coverage") or []:
+        for item in tier.get("items") or []:
+            label = item.get("display_label")
+            if label:
+                states[label] = _item_display_state(item)
+
+    for moment in payload.get("moments") or []:
+        label = moment.get("out_of_reach_item")
+        if not label:
+            continue
+        state = states.get(label)
+        if state is None:
+            # The judge invented a label, or coverage failed entirely. Drop the
+            # reference rather than render an item the other tab has never
+            # heard of.
+            logger.warning(
+                "moment cited unknown knowledge item %r; dropping the reference", label
+            )
+            moment["out_of_reach_item"] = None
+            continue
+        moment["out_of_reach_state"] = state
+
+
 SCORER_METADATA = {
     "iqr_model": "gpt-4o",
     "iqr_fallback_model": "gpt-4o-mini",
@@ -135,7 +226,11 @@ async def _persist_evaluation(
 @router.post("/eval/iqr", dependencies=[Depends(rate_limited(*_IQR_LIMIT))])
 async def eval_iqr(session_id: UUID, user: Annotated[CurrentUser, Depends(require_user)]):
     """Run IQR and SIC scorers in parallel; persist the merged result; return it."""
-    from app.evaluation.iqr_scorer import IQRScorer, convert_transcript_to_iqr
+    from app.evaluation.iqr_scorer import (
+        IQR_WEIGHTS_VERSION,
+        IQRScorer,
+        convert_transcript_to_iqr,
+    )
     from app.evaluation.sic_scorer import SICScorer
 
     session = await _load_session(session_id, user.id)
@@ -185,6 +280,12 @@ async def eval_iqr(session_id: UUID, user: Annotated[CurrentUser, Depends(requir
     else:
         payload["insight_coverage"] = sic_result if isinstance(sic_result, list) else []
 
+    # Both halves are in: settle what the moments claim against what coverage
+    # actually graded, then fix displayed proper nouns. Order matters — the
+    # reconciliation matches on labels, which normalisation must not touch.
+    _reconcile_moments_with_coverage(payload)
+    _normalize_payload_for_display(payload)
+
     await _persist_evaluation(
         session_id,
         payload,
@@ -198,6 +299,9 @@ async def eval_iqr(session_id: UUID, user: Annotated[CurrentUser, Depends(requir
             # the fallback on error, and that has to be visible afterwards.
             "iqr_model_used": iqr_scorer.last_model_used,
             "sic_model_used": sic_scorer.last_model_used,
+            # Which weighting produced overall_score, so a stored row can never
+            # claim a formula it was not scored with.
+            "iqr_weights_version": IQR_WEIGHTS_VERSION,
         },
     )
     return payload

@@ -14,12 +14,25 @@ import numpy as np
 import pytest
 from scipy.stats import norm
 
-from app.api.eval import SCORER_METADATA, sanitize_transcript
-from app.evaluation.iqr_scorer import DEFAULT_PROMPT_PATH, convert_transcript_to_iqr
+from app.api.eval import (
+    SCORER_METADATA,
+    _item_display_state,
+    _reconcile_moments_with_coverage,
+    normalize_display_text,
+    sanitize_transcript,
+)
+from app.evaluation.iqr_scorer import (
+    IQR_DIMENSION_WEIGHTS,
+    DEFAULT_PROMPT_PATH,
+    compute_overall_score,
+    convert_transcript_to_iqr,
+)
 from app.evaluation.sic_scorer import (
     DEFAULT_SIC_PROMPT_PATH,
     SIC_KEYS_DIR,
     _compute_status_for_tier,
+    _quote_is_the_students,
+    _student_turn_blob,
 )
 
 EXPECTED_CATALOG_SIZES = {
@@ -242,3 +255,182 @@ def test_cliffs_delta_endpoints():
     assert cliffs_delta([5, 6, 7], [1, 2, 3]) == pytest.approx(1.0)
     assert cliffs_delta([1, 2, 3], [5, 6, 7]) == pytest.approx(-1.0)
     assert cliffs_delta([1, 2, 3], [1, 2, 3]) == pytest.approx(0.0)
+
+
+# ── Weighted overall score ───────────────────────────────────────────────────
+
+class _Dim:
+    """Minimal stand-in — compute_overall_score reads only these two fields."""
+
+    def __init__(self, dimension, score):
+        self.dimension = dimension
+        self.score = score
+
+
+def test_overall_score_is_the_weighted_formula_not_the_mean():
+    """The PDF's sample session: 5.0 / 6.5 / 7.0 / 6.5 at 30/20/30/20 -> 6.2.
+
+    The mock's header shows 6.5, which predates the formula. 6.2 sits just
+    BELOW the simple mean of 6.25 because Framing is both the weakest dimension
+    here and the most heavily weighted — which is the weighting working, not a
+    bug. No weighting that up-weights Framing and Follow-Up Depth reaches 6.5 on
+    this session.
+    """
+    dims = [
+        _Dim("framing_and_stakeholder_fit", 5.0),
+        _Dim("question_quality_and_precision", 6.5),
+        _Dim("probing_and_follow_up_depth", 7.0),
+        _Dim("listening_interpretation_and_stewardship", 6.5),
+    ]
+    assert compute_overall_score(dims) == pytest.approx(6.2)
+    # A simple mean would give 6.25 — the weighting has to be visible in the
+    # output, or the formula is decorative.
+    assert compute_overall_score(dims) != pytest.approx(6.25)
+
+
+def test_weights_favour_framing_and_probing_and_sum_to_one():
+    assert sum(IQR_DIMENSION_WEIGHTS.values()) == pytest.approx(1.0)
+    assert (
+        IQR_DIMENSION_WEIGHTS["probing_and_follow_up_depth"]
+        > IQR_DIMENSION_WEIGHTS["question_quality_and_precision"]
+    )
+    assert (
+        IQR_DIMENSION_WEIGHTS["framing_and_stakeholder_fit"]
+        > IQR_DIMENSION_WEIGHTS["question_quality_and_precision"]
+    )
+
+
+def test_overall_score_renormalises_over_present_dimensions():
+    """A response missing a dimension must not silently score lower."""
+    partial = [_Dim("framing_and_stakeholder_fit", 8.0),
+               _Dim("probing_and_follow_up_depth", 8.0)]
+    assert compute_overall_score(partial) == pytest.approx(8.0)
+    assert compute_overall_score([]) is None
+
+
+# ── SIC key authored content ─────────────────────────────────────────────────
+
+@pytest.mark.parametrize("persona_id", sorted(EXPECTED_CATALOG_SIZES))
+def test_every_catalog_item_has_a_unique_display_label(persona_id):
+    """Labels are static and name the item in three places in the report — the
+    box, the moments' out_of_reach_item, and the consequence line. A duplicate
+    makes the moment reconciliation ambiguous."""
+    data = json.loads((SIC_KEYS_DIR / f"{persona_id}_sic_key.json").read_text(encoding="utf-8"))
+    labels = [i.get("display_label") for i in data["sic_catalog"]]
+    assert all(labels), f"{persona_id} has items without a display_label"
+    assert len(set(labels)) == len(labels), f"{persona_id} has duplicate display_labels"
+
+
+@pytest.mark.parametrize("persona_id", sorted(EXPECTED_CATALOG_SIZES))
+def test_all_personas_gate_tier_2(persona_id):
+    """Alex was the only persona without the gate, which broke cross-persona
+    comparability — the whole point of grading four personas on one scale."""
+    data = json.loads((SIC_KEYS_DIR / f"{persona_id}_sic_key.json").read_text(encoding="utf-8"))
+    assert data["grading_rules"]["tier_2_requires_gate"] is True
+
+
+@pytest.mark.parametrize("persona_id", sorted(EXPECTED_CATALOG_SIZES))
+def test_tier_metadata_is_authored_for_every_tier(persona_id):
+    data = json.loads((SIC_KEYS_DIR / f"{persona_id}_sic_key.json").read_text(encoding="utf-8"))
+    for tier in ("1", "2", "3"):
+        meta = data["tier_metadata"][tier]
+        assert meta["title"].strip(), f"{persona_id} tier {tier} has no title"
+        assert meta["description"].strip(), f"{persona_id} tier {tier} has no description"
+    # Tier 3's description has to explain what it covers without the word
+    # "signal", which means nothing to a student.
+    assert "signal" not in data["tier_metadata"]["3"]["description"].lower()
+
+
+# ── Display normalisation and moment reconciliation ──────────────────────────
+
+def test_proper_nouns_are_fixed_for_display_only():
+    assert normalize_display_text("we studied Harvard Town") == "we studied Harbortown"
+    assert normalize_display_text("Harbor Town flooding") == "Harbortown flooding"
+    assert (
+        normalize_display_text("I'm at the University of at the Worcester Polytechnic Institute")
+        == "I'm at Worcester Polytechnic Institute"
+    )
+    # Correct text is left alone, and empty input round-trips.
+    assert normalize_display_text("Harbortown") == "Harbortown"
+    assert normalize_display_text("") == ""
+    assert normalize_display_text(None) is None
+
+
+def test_item_display_state_treats_appropriate_restraint_as_opened():
+    """Restraint in response to good framing is the student's move working, not
+    a miss — it rendered as a blank square before."""
+    earned = {"elicited": True, "earned_mode": "earned", "credit_mode": "explicit"}
+    indirect = {"elicited": True, "earned_mode": "earned", "credit_mode": "indirect_acknowledgment"}
+    restraint = {"elicited": False, "type": "signal",
+                 "omission_classification": "appropriate_non_disclosure"}
+    volunteered = {"elicited": False, "earned_mode": "volunteered"}
+    assert _item_display_state(earned) == "earned"
+    assert _item_display_state(indirect) == "opened"
+    assert _item_display_state(restraint) == "opened"
+    assert _item_display_state(volunteered) == "not_opened"
+
+
+def test_moment_item_reference_resolves_against_real_coverage():
+    payload = {
+        "moments": [
+            {"out_of_reach_item": "Displacement Stress"},
+            {"out_of_reach_item": "Nonexistent Item"},
+            {"out_of_reach_item": None},
+        ],
+        "insight_coverage": [
+            {"items": [{
+                "display_label": "Displacement Stress",
+                "elicited": False,
+                "type": "signal",
+                "omission_classification": "insufficient_framing",
+            }]},
+        ],
+    }
+    _reconcile_moments_with_coverage(payload)
+    assert payload["moments"][0]["out_of_reach_state"] == "not_opened"
+    # An invented label is dropped rather than rendered against a tab that has
+    # never heard of it.
+    assert payload["moments"][1]["out_of_reach_item"] is None
+    assert "out_of_reach_state" not in payload["moments"][1]
+    assert "out_of_reach_state" not in payload["moments"][2]
+
+
+# ── Evidence quotes belong to the student ────────────────────────────────────
+
+_TURNS = [
+    {"role": "user", "text": "Could you tell me about your day to day role?"},
+    {"role": "assistant",
+     "text": "One of the challenges is balancing immediate priorities, like maintaining "
+             "our infrastructure, with longer-term adaptation strategies."},
+    {"role": "user", "text": "What makes that balance hard to hold?"},
+]
+
+
+def test_persona_lines_are_not_credited_as_the_students_words():
+    """The report labels this quote "How you accessed it". A persona line there
+    tells the student they said something they never said."""
+    blob = _student_turn_blob(_TURNS)
+    assert _quote_is_the_students("Could you tell me about your day to day role?", blob)
+    # Trimming and re-punctuation by the grader still matches.
+    assert _quote_is_the_students("could you tell me about your day to day role", blob)
+    assert _quote_is_the_students("\u201cWhat makes that balance hard to hold?\u201d", blob)
+    # The persona's own line does not.
+    assert not _quote_is_the_students(
+        "One of the challenges is balancing immediate priorities, like maintaining "
+        "our infrastructure, with longer-term adaptation strategies.",
+        blob,
+    )
+
+
+def test_quote_check_does_not_discard_when_speakers_are_unlabelled():
+    """No identifiable student turns means we cannot judge — dropping every
+    quote there would be worse than keeping them."""
+    assert _quote_is_the_students("anything at all", "")
+    assert not _quote_is_the_students("", _student_turn_blob(_TURNS))
+
+
+def test_student_blob_reads_speaker_or_role():
+    assert "day to day role" in _student_turn_blob(_TURNS)
+    assert "our infrastructure" not in _student_turn_blob(_TURNS)
+    # The IQR-style transcript labels the speaker instead of the role.
+    assert "hello there" in _student_turn_blob([{"speaker": "Student", "text": "Hello there"}])
