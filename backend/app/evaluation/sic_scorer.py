@@ -155,6 +155,76 @@ def _compute_status_for_tier(
     return "full", pct, None
 
 
+# Phrases that turn a suggested move into an extraction attempt — asking the
+# persona to name places, dates or commitments they are designed not to give.
+# Recommending one of these teaches the student a move that shuts the interview
+# down, which is worse than offering no suggestion at all.
+_EXTRACTIVE_PHRASES = (
+    "which neighborhoods", "when will", "name the areas",
+    "be abandoned", "won't be protected", "cannot be protected",
+    "internal timeline", "point of no return", "tell me your honest",
+)
+
+
+def _safe_suggested_move(suggested_follow_up: Optional[str]) -> str:
+    """The follow-up to show a student, or "" if it would teach extraction."""
+    text = (suggested_follow_up or "").strip()
+    if not text:
+        return ""
+    lowered = text.lower()
+    if any(phrase in lowered for phrase in _EXTRACTIVE_PHRASES):
+        return ""
+    return text
+
+
+def _normalize_quote(text: str) -> str:
+    """Lowercase, straighten quotes, collapse whitespace — for matching only."""
+    text = (text or "").lower()
+    for fancy, plain in (("\u2018", "'"), ("\u2019", "'"), ("\u201c", '"'), ("\u201d", '"'),
+                         ("\u2014", " "), ("\u2013", " ")):
+        text = text.replace(fancy, plain)
+    return " ".join(text.split())
+
+
+def _student_turn_blob(turns: List[dict]) -> str:
+    """Every student turn, normalised and concatenated.
+
+    The grader is told to quote the student only, and mostly does. When it does
+    not, it quotes the persona — and the report then shows the stakeholder's own
+    words back to the student under "How you accessed it", as though the student
+    had said them. Checking is cheap; trusting is not.
+    """
+    parts = []
+    for t in turns:
+        speaker = str(t.get("speaker") or t.get("role") or "").strip().lower()
+        if speaker in ("user", "student"):
+            parts.append(_normalize_quote(t.get("text") or ""))
+    return "  ".join(parts)
+
+
+def _quote_is_the_students(quote: str, student_blob: str) -> bool:
+    """True when the quote really came out of a student turn.
+
+    Tolerant of the grader trimming or re-punctuating: a 40-character prefix
+    match counts. Short fragments are accepted as-is rather than rejected on a
+    technicality — the failure being guarded against is a whole sentence lifted
+    from the persona, not a clipped phrase.
+    """
+    # Strip wrapping quotation marks: graders often return the excerpt already
+    # quoted, and matching on those would discard every legitimate quote — a
+    # far worse failure than the one this guards against.
+    normalized = _normalize_quote(quote).strip("\"'").strip()
+    if not normalized:
+        return False
+    if not student_blob:
+        # No identifiable student turns — can't judge, so don't discard.
+        return True
+    if normalized in student_blob:
+        return True
+    return normalized[:40] in student_blob
+
+
+
 # ── SICScorer ────────────────────────────────────────────────────────────────
 
 
@@ -428,6 +498,7 @@ class SICScorer:
         result: SICGradingResult = await self._grade(sic_key, turns, config=config)
 
         grades_by_id: Dict[str, SICItemGrade] = {g.chunk_id: g for g in result.grades}
+        student_blob = _student_turn_blob(turns)
 
         # ── Group catalog items by tier ──────────────────────────────────────
         tiers_raw: Dict[int, List[dict]] = {}
@@ -469,6 +540,18 @@ class SICScorer:
                 if not grade.elicited:
                     credit_mode = None
 
+                # The report presents this quote as "how you accessed it". A
+                # persona line rendered there tells the student they said
+                # something they never said, so drop anything that isn't
+                # theirs — the panel reads fine without a quote.
+                evidence_quote = grade.evidence_quote if grade.elicited else ""
+                if evidence_quote and not _quote_is_the_students(evidence_quote, student_blob):
+                    logger.warning(
+                        "SIC evidence_quote for %s is not from a student turn; dropping it: %r",
+                        item["chunk_id"], evidence_quote[:80],
+                    )
+                    evidence_quote = ""
+
                 omission_cls: Optional[str] = grade.omission_classification
                 # Only signals carry omission classifications; clear for facts.
                 if item_type != "signal" or grade.elicited:
@@ -476,21 +559,35 @@ class SICScorer:
 
                 item_views.append({
                     "chunk_id": item["chunk_id"],
+                    # Authored in the SIC key, not generated per run. The report
+                    # names these items in three places; a label that changes
+                    # between runs makes them read as different items.
+                    "display_label": item.get("display_label", ""),
                     "domain": item.get("domain", ""),
                     "type": item_type,
                     "fact_summary": item.get("fact_summary", ""),
                     "suggested_follow_up": item.get("suggested_follow_up", ""),
+                    # What the report offers on a closed item — one move, in the
+                    # student's own voice. surfacing_cues describe the behaviour
+                    # to a grader, so they are only the fallback.
+                    "suggested_move": _safe_suggested_move(item.get("suggested_follow_up")),
                     "elicited": grade.elicited,
                     "earned_mode": grade.earned_mode,
                     "credit_mode": credit_mode,
                     "omission_classification": omission_cls,
-                    "evidence_quote": grade.evidence_quote if grade.elicited else "",
+                    "evidence_quote": evidence_quote,
                     "surfacing_cues_used": cues_used,
                     "surfacing_cues_missing": cues_missing,
                 })
 
             status, pct, skill_label = _compute_status_for_tier(tier_num, item_views)
-            found = sum(1 for v in item_views if v["elicited"])
+            # Same earned_mode gate _compute_status_for_tier applies. Counting
+            # raw `elicited` here let the "N of M" badge disagree with the
+            # status printed beside it.
+            found = sum(
+                1 for v in item_views
+                if v["elicited"] and v.get("earned_mode") == "earned"
+            )
             total = len(item_views)
 
             # Choose an actionable_tip ONLY from items whose suggested_follow_up
@@ -506,18 +603,8 @@ class SICScorer:
                     # Don't push the student to extract Tier 3 content that was
                     # legitimately withheld in response to good framing.
                     continue
-                sf = v.get("suggested_follow_up") or ""
+                sf = v.get("suggested_move") or ""
                 if not sf:
-                    continue
-                # Guardrail: skip any suggested_follow_up that smells like a
-                # do_not_reward behavior (extractive language).
-                lower_sf = sf.lower()
-                guard_phrases = [
-                    "which neighborhoods", "when will", "name the areas",
-                    "be abandoned", "won't be protected", "cannot be protected",
-                    "internal timeline", "point of no return", "tell me your honest",
-                ]
-                if any(p in lower_sf for p in guard_phrases):
                     continue
                 actionable_tip = sf
                 break
@@ -547,10 +634,11 @@ class SICScorer:
 
             tier_coverages.append(coverage)
 
-        # ── Enrich with LLM-generated display labels and consequence text ──
-        # Enrichment is purely cosmetic: the frontend falls back to base
-        # fact summaries (display_label) and why_it_matters (consequence_text)
-        # when these are absent. It must never sink the whole SIC result — the
+        # ── Enrich with the per-tier consequence line ──────────────────────
+        # Display labels are static now; this pass writes only the "why it
+        # matters" sentence, which has to name the specific items THIS student
+        # missed and so cannot be authored ahead of time. Purely cosmetic: the
+        # frontend falls back to tier_metadata.why_it_matters when it's absent. It must never sink the whole SIC result — the
         # sic_enrichment module is optional and may be absent, so degrade
         # gracefully instead of raising and losing all computed coverage.
         try:
@@ -558,13 +646,9 @@ class SICScorer:
 
             enrichment = await enrich_sic_results(tier_coverages, tier_metadata)
             if enrichment:
-                label_map = {il.chunk_id: il.display_label for il in enrichment.item_labels}
                 consequence_map = {tc.tier: tc.consequence_text for tc in enrichment.tier_consequences}
                 for tc in tier_coverages:
                     tc["consequence_text"] = consequence_map.get(tc["tier"], "")
-                    for item in tc.get("items", []):
-                        if item["chunk_id"] in label_map:
-                            item["display_label"] = label_map[item["chunk_id"]]
         except Exception as e:
             logger.warning("SIC enrichment skipped (%s); returning base coverage.", e)
 

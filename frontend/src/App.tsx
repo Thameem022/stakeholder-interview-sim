@@ -20,25 +20,42 @@ function StepKicker({ children }: { children: string }) {
 
 function PersonaCard({ persona, onPick }: { persona: Persona; onPick: () => void }) {
   const meta = personaMeta(persona.key)
+  // A portrait file that 404s must not leave a broken-image icon sitting in the
+  // card. Dropping the layer falls back to the backdrop alone, which is what
+  // the card showed before any renders existed.
+  const [portraitFailed, setPortraitFailed] = useState(false)
+  const showPortrait = Boolean(meta.portrait) && !portraitFailed
   return (
     <button
       type="button"
       onClick={onPick}
       className="group flex w-full items-center gap-4 overflow-hidden rounded-lg border border-line bg-white p-3 text-left transition-colors hover:border-brand lg:flex-col lg:items-stretch lg:gap-0 lg:p-0"
     >
-      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md lg:h-44 lg:w-full lg:rounded-none">
-        {meta.image ? (
+      {/* Previews the interview itself: the same avatar over the same backdrop
+          the student meets when the call starts. The backdrop alone showed the
+          set with nobody in it. */}
+      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-brand-rose lg:h-44 lg:w-full lg:rounded-none">
+        {meta.image && (
           <img
             src={meta.image}
             alt=""
-            className="h-full w-full object-cover"
+            className="absolute inset-0 h-full w-full object-cover"
             loading="lazy"
           />
-        ) : (
-          <div className="h-full w-full bg-brand-rose" />
+        )}
+        {showPortrait && (
+          <img
+            src={meta.portrait}
+            alt={persona.display_name}
+            onError={() => setPortraitFailed(true)}
+            // Anchored to the bottom so the head-and-shoulders render sits in
+            // the scene rather than floating in the middle of it.
+            className="absolute inset-x-0 bottom-0 mx-auto h-[115%] w-auto max-w-none object-contain object-bottom drop-shadow-[0_2px_12px_rgba(12,10,9,0.28)]"
+            loading="lazy"
+          />
         )}
         {meta.role && (
-          <span className="absolute bottom-3 left-3 hidden bg-ink/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white lg:inline-block">
+          <span className="absolute bottom-3 left-3 hidden bg-ink/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white backdrop-blur-[2px] lg:inline-block">
             {meta.role}
           </span>
         )}

@@ -1,11 +1,16 @@
 {
   "persona_id": "michael_mike_alvarez",
   "persona_name": "Michael \"Mike\" Alvarez",
+  "role_title": "East Harbor resident",
+  "pronouns": "he/him/his",
   "archetype": "The Place-Anchored Witness",
   "schema_version": "2.0",
   "omission_policy": {
     "tier_3_not_accessed_is_not_failure": true,
-    "valid_interpretations": ["insufficient_framing", "appropriate_non_disclosure"],
+    "valid_interpretations": [
+      "insufficient_framing",
+      "appropriate_non_disclosure"
+    ],
     "do_not_reward": [
       "pressing_for_blame",
       "solution_first_thinking",
@@ -35,21 +40,21 @@
   },
   "tier_metadata": {
     "1": {
-      "title": "Lived Observational Knowledge",
+      "title": "What He Sees Day to Day",
       "category": "Experiential",
-      "description": "Surfaces through basic respectful listening — flooding pattern change, local pattern recognition (which places flood first), and daily routine adjustments",
+      "description": "What Mike will tell anyone who listens — how the flooding has changed, which streets go first, what he does differently because of it.",
       "why_it_matters": "Mike's daily observations are the household-scale ground truth for climate impact in Harbortown. If you skip this baseline, your adaptation plan will be built from documents rather than from how flooding is actually lived. Nearly every interviewer captures this — on its own, it is only the surface."
     },
     "2": {
-      "title": "Informal Systems, Social Patterns, and Power",
+      "title": "How Help Actually Arrives",
       "category": "Contextual",
-      "description": "Surfaces when students ask who is affected and how responses differ — uneven visibility of harm, informal prioritization without formal language, informal mutual aid, and the disconnect with institutional timelines",
+      "description": "Who gets attention and who waits — which repairs come fast, what neighbours do for each other, how slow the official process feels from a porch in East Harbor.",
       "why_it_matters": "Recurring patterns of attention, mutual aid, and slow institutional response are how harm persists below the urgency thresholds that planning systems can see. You have to synthesize across his stories, not quote single statements. If you miss this layer, your plan will be technically correct but socially blind to who is actually being protected."
     },
     "3": {
-      "title": "Ethical, Existential, and Decision-Critical Insight",
+      "title": "Ethical & Strategic Signals",
       "category": "Strategic",
-      "description": "Emerges only when Mike feels genuinely heard — fear of quiet displacement, loss of belonging, erosion of trust through normalization, and moral unease with adaptation narratives",
+      "description": "What Mike carries but won't say outright — what he stands to lose that isn't property. He only puts this into words once he believes you are actually listening.",
       "why_it_matters": "Mike's most consequential knowledge is about the social loss that adaptation can produce even without catastrophic damage — the kind of loss that does not show up in cost-benefit analyses. If you fail to make space for this, your recommendations may protect the place while quietly dissolving the community that made it worth protecting."
     }
   },
@@ -64,6 +69,7 @@
   "sic_catalog": [
     {
       "chunk_id": "mike_a_t1_flooding_pattern_change",
+      "display_label": "Changing Flooding",
       "domain": "experiential",
       "tier": 1,
       "type": "fact",
@@ -73,6 +79,7 @@
     },
     {
       "chunk_id": "mike_a_t1_places_that_flood_first",
+      "display_label": "What Floods First",
       "domain": "experiential",
       "tier": 1,
       "type": "fact",
@@ -82,6 +89,7 @@
     },
     {
       "chunk_id": "mike_a_t1_routine_adjustments",
+      "display_label": "Daily Adjustments",
       "domain": "experiential",
       "tier": 1,
       "type": "fact",
@@ -91,6 +99,7 @@
     },
     {
       "chunk_id": "mike_a_t2_uneven_prioritization",
+      "display_label": "Uneven Attention",
       "domain": "contextual",
       "tier": 2,
       "type": "fact",
@@ -106,6 +115,7 @@
     },
     {
       "chunk_id": "mike_a_t2_informal_prioritization",
+      "display_label": "Who Gets Help",
       "domain": "contextual",
       "tier": 2,
       "type": "fact",
@@ -121,6 +131,7 @@
     },
     {
       "chunk_id": "mike_a_t2_informal_mutual_aid",
+      "display_label": "Mutual Aid",
       "domain": "contextual",
       "tier": 2,
       "type": "fact",
@@ -136,6 +147,7 @@
     },
     {
       "chunk_id": "mike_a_t2_planning_disconnect",
+      "display_label": "Planning Disconnect",
       "domain": "contextual",
       "tier": 2,
       "type": "fact",
@@ -151,6 +163,7 @@
     },
     {
       "chunk_id": "mike_a_t3_quiet_displacement",
+      "display_label": "Quiet Displacement",
       "domain": "ethical",
       "tier": 3,
       "type": "signal",
@@ -183,6 +196,7 @@
     },
     {
       "chunk_id": "mike_a_t3_loss_of_belonging",
+      "display_label": "Loss of Belonging",
       "domain": "ethical",
       "tier": 3,
       "type": "signal",
@@ -215,6 +229,7 @@
     },
     {
       "chunk_id": "mike_a_t3_trust_erosion",
+      "display_label": "Trust Erosion",
       "domain": "ethical",
       "tier": 3,
       "type": "signal",
@@ -247,6 +262,7 @@
     },
     {
       "chunk_id": "mike_a_t3_resilience_as_burden",
+      "display_label": "Resilience as Burden",
       "domain": "ethical",
       "tier": 3,
       "type": "signal",

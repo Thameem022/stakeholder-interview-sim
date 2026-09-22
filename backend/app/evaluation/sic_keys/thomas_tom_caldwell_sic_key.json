@@ -1,11 +1,16 @@
 {
   "persona_id": "thomas_tom_caldwell",
   "persona_name": "Thomas \"Tom\" Caldwell",
+  "role_title": "Waterfront developer",
+  "pronouns": "he/him/his",
   "archetype": "The Confident Rationalist",
   "schema_version": "2.0",
   "omission_policy": {
     "tier_3_not_accessed_is_not_failure": true,
-    "valid_interpretations": ["insufficient_framing", "appropriate_non_disclosure"],
+    "valid_interpretations": [
+      "insufficient_framing",
+      "appropriate_non_disclosure"
+    ],
     "do_not_reward": [
       "moralizing",
       "demanding_admissions_of_responsibility",
@@ -39,21 +44,21 @@
   },
   "tier_metadata": {
     "1": {
-      "title": "Technical, Regulatory, and Market Knowledge",
+      "title": "What the Rules Require",
       "category": "Technical",
-      "description": "Accessible through competent, informed questioning — flood compliance standards, engineering and design responses, insurance and financing dynamics, and waterfront market behavior. Tom is confident and fluent here.",
+      "description": "What Tom will explain fluently to anyone competent — flood standards, how buildings get designed around them, how lenders and insurers price the risk, what the market wants.",
       "why_it_matters": "Tom's technical fluency establishes his perceived legitimacy and reflects how formal systems currently operate. Many interviews stop here, mistaking fluency for completeness. If you don't see what lies beyond it, your adaptation plan won't be able to explain why current development continues at scale."
     },
     "2": {
-      "title": "Policy Ambiguity, Incentive Alignment, and System Lag",
+      "title": "Why the System Allows It",
       "category": "Contextual",
-      "description": "Surfaces when students ask not just what Tom does, but why the system allows it — policy ambiguity, incentive misalignment, regulatory lag, and emerging path dependency",
+      "description": "What sits behind the rules — what is still unsettled, what developers are actually rewarded for, how far regulation trails the risk, and what today's buildings commit the town to.",
       "why_it_matters": "These structural patterns are how adaptation trajectories get shaped indirectly. 'Neutral' compliance has directional effects, and if you treat compliance as static, your plan will miss how regulation today reshapes risk a decade out. Connecting regulation to future risk is the work."
     },
     "3": {
-      "title": "Ethical, Strategic, and System-Shaping Insight",
+      "title": "Ethical & Strategic Signals",
       "category": "Strategic",
-      "description": "Emerges only when students engage Tom at the level of system consequence rather than moral intention — that today's building shapes tomorrow's adaptation, that compliance does not equal sustainability, that capital sets de facto priorities, and Tom's quiet unease about long-term resolution",
+      "description": "What Tom carries but won't say outright — what he knows about where this ends up. He engages here on consequence, never on motive.",
       "why_it_matters": "Tom's deepest knowledge is about how power operates through inaction — how investment decisions made today narrow tomorrow's adaptation options without anyone explicitly choosing that path. If you miss this, you'll misread developers as villains and miss the structural way the system defers hard decisions to the market — exactly the dynamic your adaptation plan needs to address."
     }
   },
@@ -68,6 +73,7 @@
   "sic_catalog": [
     {
       "chunk_id": "tom_c_t1_flood_compliance",
+      "display_label": "Flood Compliance",
       "domain": "technical",
       "tier": 1,
       "type": "fact",
@@ -77,6 +83,7 @@
     },
     {
       "chunk_id": "tom_c_t1_engineering_responses",
+      "display_label": "Engineering Responses",
       "domain": "technical",
       "tier": 1,
       "type": "fact",
@@ -86,6 +93,7 @@
     },
     {
       "chunk_id": "tom_c_t1_financing_dynamics",
+      "display_label": "Financing Dynamics",
       "domain": "technical",
       "tier": 1,
       "type": "fact",
@@ -95,6 +103,7 @@
     },
     {
       "chunk_id": "tom_c_t1_market_behavior",
+      "display_label": "Market Behaviour",
       "domain": "technical",
       "tier": 1,
       "type": "fact",
@@ -104,6 +113,7 @@
     },
     {
       "chunk_id": "tom_c_t2_policy_ambiguity",
+      "display_label": "Policy Ambiguity",
       "domain": "contextual",
       "tier": 2,
       "type": "fact",
@@ -119,6 +129,7 @@
     },
     {
       "chunk_id": "tom_c_t2_incentive_misalignment",
+      "display_label": "Incentive Mismatch",
       "domain": "contextual",
       "tier": 2,
       "type": "fact",
@@ -134,6 +145,7 @@
     },
     {
       "chunk_id": "tom_c_t2_regulation_lag",
+      "display_label": "Regulatory Lag",
       "domain": "contextual",
       "tier": 2,
       "type": "fact",
@@ -148,6 +160,7 @@
     },
     {
       "chunk_id": "tom_c_t2_path_dependency",
+      "display_label": "Path Dependency",
       "domain": "contextual",
       "tier": 2,
       "type": "fact",
@@ -162,6 +175,7 @@
     },
     {
       "chunk_id": "tom_c_t3_today_shapes_tomorrow",
+      "display_label": "Today Shapes Tomorrow",
       "domain": "ethical",
       "tier": 3,
       "type": "signal",
@@ -194,6 +208,7 @@
     },
     {
       "chunk_id": "tom_c_t3_compliance_vs_sustainability",
+      "display_label": "Compliance Isn't Enough",
       "domain": "ethical",
       "tier": 3,
       "type": "signal",
@@ -226,6 +241,7 @@
     },
     {
       "chunk_id": "tom_c_t3_capital_as_priority",
+      "display_label": "Capital Sets Priorities",
       "domain": "ethical",
       "tier": 3,
       "type": "signal",
@@ -258,6 +274,7 @@
     },
     {
       "chunk_id": "tom_c_t3_unresolved_limits",
+      "display_label": "Unresolved Limits",
       "domain": "ethical",
       "tier": 3,
       "type": "signal",
