@@ -1,11 +1,16 @@
 {
   "persona_id": "alex_martinez",
   "persona_name": "Alex Martinez",
+  "role_title": "Coastal Resilience Officer",
+  "pronouns": "she/her/hers",
   "archetype": "The Diplomatic Gatekeeper",
   "schema_version": "2.0",
   "omission_policy": {
     "tier_3_not_accessed_is_not_failure": true,
-    "valid_interpretations": ["insufficient_framing", "appropriate_non_disclosure"],
+    "valid_interpretations": [
+      "insufficient_framing",
+      "appropriate_non_disclosure"
+    ],
     "do_not_reward": [
       "assertiveness",
       "policy_advocacy",
@@ -27,23 +32,27 @@
       "process_oriented_inquiry"
     ]
   },
+  "grading_rules": {
+    "tier_2_requires_gate": true,
+    "tier_2_gate_rationale": "Alex volunteers contextual content about capacity, exposure and timing in response to broad questions about her work. To distinguish students who actually probe from students who simply triggered Alex's natural disclosure, Tier 2 items also require a targeted student question or framing move that names the topic before the persona's mention. Added so the four personas grade Tier 2 the same way — the asymmetry broke cross-persona comparability."
+  },
   "tier_metadata": {
     "1": {
-      "title": "Baseline Institutional Knowledge",
+      "title": "Baseline General Knowledge",
       "category": "Foundational",
-      "description": "Public, procedural, freely disclosed — climate baseline, study landscape, formal strategy categories, institutional process, and the principle of engagement",
+      "description": "What Alex will tell anyone who asks clearly — her role, the studies, the town's situation.",
       "why_it_matters": "These foundational facts about existing studies, processes, and engagement principles are the baseline of any adaptation plan. They feel productive to elicit, but they are intentionally incomplete — many interviews stop here by design. If you skip this baseline, your plan will be built on assumptions instead of the documented record."
     },
     "2": {
-      "title": "Contextual & Governance Knowledge",
+      "title": "Underlying Processes",
       "category": "Tactical",
-      "description": "Surfaces when students ask how decisions actually move — capacity constraints, uneven exposure, political appetite, temporal mismatch, and the implicit 'buying time' framing of current measures",
+      "description": "How things actually work behind the public account — staffing, timing, politics, where the pressure sits. Alex opens this up when you ask about the mechanism rather than the headline.",
       "why_it_matters": "This contextual knowledge is where the real institutional constraints on implementation live — who has capacity, where attention concentrates, which timelines align, and which measures are quietly understood as interim. If you miss this layer, your recommendations will look technically right but be institutionally unrealistic."
     },
     "3": {
       "title": "Ethical & Strategic Signals",
       "category": "Strategic",
-      "description": "Guarded, occasionally candid insight surfaced only through reflective listening — long-term protectability, false security, sequencing logic, the absence of formal thresholds, and moral stress around displacement",
+      "description": "What Alex carries but won't say outright — the concerns she only puts into words if you make room for them. Sometimes her restraint is the right answer, not a miss.",
       "why_it_matters": "The deepest insight here lives in how Alex navigates ambiguity — what cannot be protected indefinitely, how 'voluntary' carries pressure, and the absence of thresholds for shifting strategy. If you press for positions or facts, you shut these signals down. If you miss them, your adaptation plan won't account for the questions the planning system itself is deferring."
     }
   },
@@ -58,6 +67,7 @@
   "sic_catalog": [
     {
       "chunk_id": "alex_m_t1_climate_baseline",
+      "display_label": "Climate Baseline",
       "domain": "technical",
       "tier": 1,
       "type": "fact",
@@ -67,6 +77,7 @@
     },
     {
       "chunk_id": "alex_m_t1_study_landscape",
+      "display_label": "Study Landscape",
       "domain": "technical",
       "tier": 1,
       "type": "fact",
@@ -76,6 +87,7 @@
     },
     {
       "chunk_id": "alex_m_t1_formal_strategies",
+      "display_label": "Formal Strategies",
       "domain": "technical",
       "tier": 1,
       "type": "fact",
@@ -85,6 +97,7 @@
     },
     {
       "chunk_id": "alex_m_t1_institutional_process",
+      "display_label": "Institutional Process",
       "domain": "contextual",
       "tier": 1,
       "type": "fact",
@@ -94,6 +107,7 @@
     },
     {
       "chunk_id": "alex_m_t1_engagement_importance",
+      "display_label": "Engagement Importance",
       "domain": "contextual",
       "tier": 1,
       "type": "fact",
@@ -103,6 +117,7 @@
     },
     {
       "chunk_id": "alex_m_t2_capacity",
+      "display_label": "Staff Capacity",
       "domain": "contextual",
       "tier": 2,
       "type": "fact",
@@ -117,6 +132,7 @@
     },
     {
       "chunk_id": "alex_m_t2_uneven_exposure",
+      "display_label": "Uneven Exposure",
       "domain": "contextual",
       "tier": 2,
       "type": "fact",
@@ -132,6 +148,7 @@
     },
     {
       "chunk_id": "alex_m_t2_political_cycle",
+      "display_label": "Political Cycle",
       "domain": "contextual",
       "tier": 2,
       "type": "fact",
@@ -146,6 +163,7 @@
     },
     {
       "chunk_id": "alex_m_t2_temporal_mismatch",
+      "display_label": "Temporal Mismatch",
       "domain": "technical",
       "tier": 2,
       "type": "fact",
@@ -160,6 +178,7 @@
     },
     {
       "chunk_id": "alex_m_t2_buying_time",
+      "display_label": "Buying Time",
       "domain": "contextual",
       "tier": 2,
       "type": "fact",
@@ -175,6 +194,7 @@
     },
     {
       "chunk_id": "alex_m_t3_long_term_protectability",
+      "display_label": "Long-term Protectability",
       "domain": "ethical",
       "tier": 3,
       "type": "signal",
@@ -208,6 +228,7 @@
     },
     {
       "chunk_id": "alex_m_t3_false_security",
+      "display_label": "False Security",
       "domain": "ethical",
       "tier": 3,
       "type": "signal",
@@ -241,6 +262,7 @@
     },
     {
       "chunk_id": "alex_m_t3_sequencing_and_equity",
+      "display_label": "Sequencing & Equity",
       "domain": "ethical",
       "tier": 3,
       "type": "signal",
@@ -273,6 +295,7 @@
     },
     {
       "chunk_id": "alex_m_t3_threshold_gap",
+      "display_label": "Threshold Gap",
       "domain": "ethical",
       "tier": 3,
       "type": "signal",
@@ -305,6 +328,7 @@
     },
     {
       "chunk_id": "alex_m_t3_displacement_moral_stress",
+      "display_label": "Displacement Stress",
       "domain": "ethical",
       "tier": 3,
       "type": "signal",
