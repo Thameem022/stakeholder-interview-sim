@@ -10,58 +10,93 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
-class ItemLabel(BaseModel):
-    chunk_id: str
-    display_label: str = Field(description="2-3 word noun-phrase label for the knowledge item")
-
-
 class TierConsequence(BaseModel):
     tier: int
     consequence_text: str = Field(
-        description="1-2 sentence explanation of what the student's plan will miss or get wrong"
+        description="1-3 sentences naming what the student's plan will miss, item by item"
     )
 
 
 class SICEnrichmentResult(BaseModel):
-    item_labels: List[ItemLabel]
     tier_consequences: List[TierConsequence]
 
 
 _ENRICHMENT_SYSTEM_PROMPT = """\
 You are a feedback writer for a stakeholder interview simulation in climate adaptation planning.
 
-You will receive a list of knowledge items grouped by tier, each with a fact_summary and whether the student accessed it.
+You will receive a list of knowledge items grouped by tier. Each item has a short label, \
+a summary of what it covers, and whether the student opened it.
 
-Produce two things:
+For each tier that has at least one item the student did NOT open, write a `consequence_text`: \
+what this student's climate adaptation plan will specifically lack because those items stayed closed.
 
-1. **display_label** for EVERY item (accessed or not): a short 2–3 word noun phrase derived from the fact_summary. \
-These labels appear on small cards so they must be scannable. Examples:
-   - "Climate risk baseline for Harbortown — Alex acknowledges increasing nuisance flooding..." → "Climate Baseline"
-   - "Planning, engineering, and public works staff are stretched thin..." → "Staff Capacity"
-   - "Alex carries moral stress around displacement and buyouts..." → "Displacement Stress"
-   - "Even short flooding closures cause unrecoverable revenue losses..." → "Revenue Sensitivity"
-   - "Visibility and perception matter as much as physical damage..." → "Perception Fragility"
+Rules:
 
-2. **consequence_text** for each tier that has at least one missed item: a 1–2 sentence explanation \
-of what the student's climate adaptation plan will specifically lack because they missed those items. \
-Use second person ("Your plan…", "You won't account for…"). Be concrete — name the planning gap, \
-not generic advice like "probe deeper." If a tier has NO missed items, omit it from tier_consequences.
+1. ACCOUNT FOR EVERY MISSED ITEM IN THE TIER. If four items were missed, the sentence has to carry \
+all four — name what each one was, compactly, in one flowing sentence or two. Naming one and \
+implying the rest is the specific failure this field exists to fix. If exactly one was missed, \
+write about that one.
 
-Examples of good consequence_text:
-- "Because you missed this threshold, your final climate adaptation plan will be blind to the economic survival of the downtown commercial corridor."
-- "Your plan may propose timelines that look reasonable on paper but ignore how quickly a small business can go from disrupted to closed."
-- "Missing this knowledge means your adaptation strategy won't account for the questions the planning system itself is deferring."
+2. Use second person: "Your plan…", "You won't account for…". Never "the student".
+
+3. Be concrete. Name the planning gap, not generic advice. Never write "probe deeper", \
+"ask more follow-up questions", or any other coaching instruction — this field says what is \
+missing from the plan, not what the student should have done.
+
+4. Plain language a first-year student understands. Do NOT use the phrases "framing gap", \
+"leading question", "open-ended", "rapport-building", "extractive" or "reflective silence". \
+"FRAMING GAP" in particular must never appear.
+
+5. If a tier has NO missed items, omit it from tier_consequences entirely.
+
+Examples of the right shape:
+
+- "Four things stayed closed here, and together they are the reality your plan has to survive: how \
+thin staff capacity already is, how election cycles shape what Council will back, how far planning \
+horizons lag behind the risk timeline, and which current measures are only buying time. Without \
+them, recommendations can look sound on paper and stall in practice."
+
+- "You didn't get to how adaptation decisions actually get approved and funded, so your plan may \
+recommend things that can't move through the town's process or attract the grants it depends on."
+
+- "You reached most of what Alex holds here, but not his worry that visible investment can signal a \
+permanence the assumptions don't support. Without it, your plan may lean on measures that reassure \
+the public while deferring the harder decision."
 """
+
+
+def _item_state(item: dict) -> str:
+    """Earned / Opened / Not opened — the three states the student sees.
+
+    Mirrors the frontend's state model exactly. A signal the persona withheld in
+    response to good framing counts as Opened, not a miss: the student's move
+    worked, and the writer must not describe it as a gap.
+    """
+    if item.get("elicited") and item.get("earned_mode") == "earned":
+        if item.get("credit_mode") in ("explicit", "explicit_acknowledgment"):
+            return "EARNED"
+        return "OPENED"
+    if (
+        not item.get("elicited")
+        and item.get("type") == "signal"
+        and item.get("omission_classification") == "appropriate_non_disclosure"
+    ):
+        return "OPENED"
+    return "NOT OPENED"
 
 
 async def enrich_sic_results(
     tier_coverages: List[dict],
     tier_metadata: Dict[str, dict],
 ) -> Optional[SICEnrichmentResult]:
-    """Generate display labels and consequence text for SIC results.
+    """Generate the per-tier "why it matters" consequence line.
+
+    Display labels are authored in the SIC keys and are NOT produced here — this
+    pass exists only for the one sentence that depends on which items this
+    particular student missed.
 
     Returns None if the LLM call fails — callers should treat this as
-    non-fatal and proceed with empty labels/consequences.
+    non-fatal and fall back to tier_metadata.why_it_matters.
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -72,10 +107,16 @@ async def enrich_sic_results(
     for tc in tier_coverages:
         tier_num = tc["tier"]
         meta = tier_metadata.get(str(tier_num), {})
-        user_lines.append(f"## Tier {tier_num}: {meta.get('title', '')} ({meta.get('category', '')})")
+        missed = [i for i in tc.get("items", []) if _item_state(i) == "NOT OPENED"]
+        user_lines.append(
+            f"## Tier {tier_num}: {meta.get('title', '')} "
+            f"— {len(missed)} item(s) not opened"
+        )
         for item in tc.get("items", []):
-            status = "ACCESSED" if item.get("elicited") else "MISSED"
-            user_lines.append(f"- [{status}] {item['chunk_id']}: {item.get('fact_summary', '')}")
+            label = item.get("display_label") or item["chunk_id"]
+            user_lines.append(
+                f"- [{_item_state(item)}] {label}: {item.get('fact_summary', '')}"
+            )
         user_lines.append("")
 
     user_message = "\n".join(user_lines)
@@ -93,5 +134,5 @@ async def enrich_sic_results(
         ])
         return result
     except Exception:
-        logger.exception("SIC enrichment LLM call failed; proceeding without labels/consequences")
+        logger.exception("SIC enrichment LLM call failed; proceeding without consequence text")
         return None
