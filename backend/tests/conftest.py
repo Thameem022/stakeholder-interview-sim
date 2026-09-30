@@ -17,6 +17,7 @@ import uuid  # noqa: E402
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.auth.csrf import CSRF_HEADER, SAFE_METHODS  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.main import app  # noqa: E402
 from tests.db import TEST_PREFIX, cleanup_test_rows, sql  # noqa: E402
@@ -25,12 +26,38 @@ TEMP = settings.auth_dev_temp_password
 GOOD_PASSWORD = "Harbortown!2026x"
 
 
+class CSRFTestClient(TestClient):
+    """Behaves like the real frontend: echoes the CSRF cookie on every write.
+
+    Without this, every POST in the suite would need to carry the header by
+    hand. Set `csrf_auto = False` to send requests the way a cross-site
+    attacker would — without the header.
+    """
+
+    csrf_auto = True
+
+    def request(self, method, url, **kwargs):
+        if self.csrf_auto and method.upper() not in SAFE_METHODS:
+            name = settings.csrf_cookie_name
+            # Look the cookie up by iterating: the jar may hold it under the
+            # server's domain, and cookies.get() raises if a second copy with
+            # a different domain were ever added.
+            token = next((c.value for c in self.cookies.jar if c.name == name), None)
+            if token is None:
+                token = "test-csrf-token"
+                self.cookies.set(name, token)
+            headers = dict(kwargs.pop("headers", None) or {})
+            headers.setdefault(CSRF_HEADER, token)
+            kwargs["headers"] = headers
+        return super().request(method, url, **kwargs)
+
+
 @pytest.fixture
 def client():
     cleanup_test_rows()
     # The context manager runs the lifespan, which is what initialises the
     # asyncpg pool the endpoints rely on.
-    with TestClient(app) as c:
+    with CSRFTestClient(app) as c:
         yield c
     cleanup_test_rows()
 

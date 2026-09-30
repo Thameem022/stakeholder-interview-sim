@@ -410,6 +410,12 @@ export class RealtimeWebRTCSession {
       this.sendToolOutput(callId, '(empty query)')
       return
     }
+    if (!this.sessionId) {
+      // Unreachable in practice — the id is set before the data channel
+      // opens — but retrieval is scoped to a session and refuses without one.
+      this.sendToolOutput(callId, '(retrieval unavailable)')
+      return
+    }
     try {
       const { text } = await postRetrieve(this.personaId, query, this.sessionId)
       this.sendToolOutput(callId, text)

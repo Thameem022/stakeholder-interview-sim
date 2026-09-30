@@ -9,6 +9,36 @@ const apiClient = axios.create({
   withCredentials: true,
 })
 
+// Double-submit CSRF: the server issues a readable cookie and rejects any write
+// that does not echo it in this header. In production the cookie carries the
+// __Host- prefix, so accept either name.
+const CSRF_HEADER = 'X-CSRF-Token'
+const CSRF_COOKIES = ['__Host-sis_csrf', 'sis_csrf']
+const SAFE_METHODS = new Set(['get', 'head', 'options'])
+
+const readCsrfCookie = (): string | null => {
+  for (const part of document.cookie.split('; ')) {
+    const eq = part.indexOf('=')
+    if (eq > 0 && CSRF_COOKIES.includes(part.slice(0, eq))) {
+      return decodeURIComponent(part.slice(eq + 1))
+    }
+  }
+  return null
+}
+
+apiClient.interceptors.request.use(async (config) => {
+  if (SAFE_METHODS.has((config.method ?? 'get').toLowerCase())) return config
+  let token = readCsrfCookie()
+  if (!token) {
+    // Any response issues the cookie. /api/auth/me on load normally has, but a
+    // write can still come first (e.g. the cookie was cleared mid-session).
+    await apiClient.get('/api/health')
+    token = readCsrfCookie()
+  }
+  if (token) config.headers.set(CSRF_HEADER, token)
+  return config
+})
+
 export interface Persona {
   key: string
   display_name: string
@@ -70,11 +100,11 @@ export const getRealtimeToken = async (
 export const postRetrieve = async (
   personaId: string,
   query: string,
-  sessionId?: string | null
+  sessionId: string
 ): Promise<{ text: string }> => {
   const { data } = await apiClient.post(
     '/api/realtime/retrieve',
-    { persona_id: personaId, query, session_id: sessionId ?? null },
+    { persona_id: personaId, query, session_id: sessionId },
     // Background call during a live interview — see skipAuthRedirect.
     { skipAuthRedirect: true }
   )

@@ -27,6 +27,7 @@ from app.api.auth import router as auth_router
 from app.api.eval import router as eval_router
 from app.api.health import router as health_router
 from app.api.personas import router as personas_router
+from app.auth.csrf import CSRF_HEADER, CSRFMiddleware
 from app.auth.dependencies import require_user
 from app.config import settings
 from app.db import close_pool, init_pool
@@ -43,13 +44,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Stakeholder Interview Simulator", lifespan=lifespan)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(CSRFMiddleware)
+
+# Added after CSRF so it wraps it: a preflight is answered here without reaching
+# the CSRF check, and a CSRF rejection still carries the CORS headers the
+# browser needs to surface it. Production is same-origin and lists no origins,
+# so there is no middleware at all rather than one that allows nothing.
+if settings.cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type", CSRF_HEADER],
+    )
 
 # Public. /health is the deploy probe, and the auth router owns its own 401s —
 # gating it would lock everyone out of the login endpoints themselves.

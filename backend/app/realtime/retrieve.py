@@ -40,9 +40,9 @@ _TRANSCRIPT_LIMIT = ("realtime-transcript", 600, 3600)
 class RetrieveRequest(BaseModel):
     persona_id: str
     query: str
-    # Optional so an older client, or an ad-hoc call, still retrieves normally —
-    # the telemetry row just cannot be joined back to an interview.
-    session_id: Optional[str] = None
+    # Required: retrieval is only meaningful inside the caller's own interview,
+    # and the session is what ties the call (and its telemetry) to that owner.
+    session_id: str
 
 
 class RetrieveResponse(BaseModel):
@@ -142,9 +142,25 @@ def _format_context(persona_chunks, world_chunks) -> str:
     response_model=RetrieveResponse,
     dependencies=[Depends(rate_limited(*_RETRIEVE_LIMIT))],
 )
-async def retrieve_context(req: RetrieveRequest) -> RetrieveResponse:
+async def retrieve_context(
+    req: RetrieveRequest, user: Annotated[CurrentUser, Depends(require_user)]
+) -> RetrieveResponse:
     if not req.persona_id or not req.query.strip():
         raise HTTPException(status_code=400, detail="persona_id and query required")
+
+    try:
+        sid = UUID(req.session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid session_id")
+
+    # Checked before anything is embedded, searched or logged, so another
+    # participant's session id buys the caller nothing — not even a telemetry
+    # row attributed to that session. Same 404 as "does not exist".
+    session = await InterviewSession.load(sid, user.id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    if session.persona_id != req.persona_id:
+        raise HTTPException(status_code=400, detail="persona_id does not match session")
 
     k_persona, k_world = 5, 3
     started = perf_counter()
@@ -155,7 +171,7 @@ async def retrieve_context(req: RetrieveRequest) -> RetrieveResponse:
         logger.warning(f"retrieve embed failed: {e}")
         elapsed = (perf_counter() - started) * 1000
         _record_retrieval_event(
-            session_id=req.session_id, persona_id=req.persona_id, query=req.query,
+            session_id=sid, persona_id=req.persona_id, query=req.query,
             embed_ms=elapsed, search_ms=None, total_ms=elapsed,
             persona_top_scores=[], world_top_scores=[],
             persona_chunk_ids=[], world_chunk_ids=[],
@@ -189,7 +205,7 @@ async def retrieve_context(req: RetrieveRequest) -> RetrieveResponse:
         world_chunks = results[1]
 
     _record_retrieval_event(
-        session_id=req.session_id, persona_id=req.persona_id, query=req.query,
+        session_id=sid, persona_id=req.persona_id, query=req.query,
         embed_ms=embed_ms, search_ms=search_ms,
         total_ms=(perf_counter() - started) * 1000,
         persona_top_scores=_scores(persona_chunks), world_top_scores=_scores(world_chunks),

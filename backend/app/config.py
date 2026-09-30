@@ -2,6 +2,7 @@ import logging
 import os
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -34,6 +35,15 @@ class Settings(BaseSettings):
     # "dev" or "prod". Gates cookie Secure and the fixed-temp-password guard.
     environment: str = "dev"
 
+    # Comma-separated origins allowed to call the API cross-origin with
+    # credentials. Production serves the SPA from the API's own origin, so it
+    # needs none; empty in development falls back to the Vite dev server.
+    cors_allow_origins: str = ""
+
+    # Double-submit CSRF cookie. Readable by the page on purpose — the frontend
+    # echoes it back in X-CSRF-Token, which a cross-site form cannot do.
+    auth_csrf_cookie_name: str = "sis_csrf"
+
     # Auth
     auth_email_domain: str = "wpi.edu"
     auth_cookie_name: str = "sis_session"
@@ -64,6 +74,21 @@ class Settings(BaseSettings):
         return self.environment.strip().lower() == "prod"
 
     @property
+    def cors_origins(self) -> list[str]:
+        origins = [o.strip() for o in self.cors_allow_origins.split(",") if o.strip()]
+        if not origins and not self.is_production:
+            return [_DEV_FRONTEND_ORIGIN]
+        return origins
+
+    @property
+    def csrf_cookie_name(self) -> str:
+        # __Host- makes the browser refuse the cookie unless it is Secure,
+        # host-only and path=/, so a sibling subdomain cannot plant one. It
+        # needs HTTPS, hence production only.
+        name = self.auth_csrf_cookie_name
+        return f"__Host-{name}" if self.is_production else name
+
+    @property
     def registration_allowlist(self) -> set[str]:
         return {
             e.strip().lower()
@@ -85,9 +110,31 @@ class Settings(BaseSettings):
         return email in allowed or f"*@{email.rpartition('@')[2]}" in allowed
 
 
+_DEV_FRONTEND_ORIGIN = "http://localhost:5173"
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "[::1]", "::1", "0.0.0.0"}
+
+
+def check_cors_origins(s: Settings) -> None:
+    """Refuse a production boot that would trust a loopback origin.
+
+    Any page served from the user's own machine — a dev server, a local tool —
+    could otherwise make credentialed calls against production.
+    """
+    if not s.is_production:
+        return
+    for origin in s.cors_origins:
+        if urlsplit(origin).hostname in _LOOPBACK_HOSTS or origin == "*":
+            raise RuntimeError(
+                f"CORS_ALLOW_ORIGINS contains {origin!r}, which cannot run with "
+                "ENVIRONMENT=prod. Production is same-origin; leave it empty or "
+                "list the production origin only."
+            )
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     s = Settings()
+    check_cors_origins(s)
     # Bridge loaded values into os.environ so libraries that read directly
     # (langchain ChatOpenAI, openai SDK, scorers using os.getenv) all see them.
     # Do not overwrite values the user already set in their shell.

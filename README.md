@@ -13,7 +13,7 @@ Repo name is `stakeholder-interview-sim`; the deployed product name is
 
 | Persona id | Role | Realtime voice |
 |---|---|---|
-| `alex_martinez` | Municipal planner | `echo` |
+| `alex_martinez` | Municipal planner | `sage` |
 | `michael_mike_alvarez` | Waterfront resident | `ash` |
 | `sarah_donnelly` | Small-business owner | `coral` |
 | `thomas_tom_caldwell` | Developer | `ballad` |
@@ -175,7 +175,7 @@ Two conventions worth knowing:
 
 ## Database
 
-Five Alembic migrations:
+Six Alembic migrations:
 
 | Revision | Adds |
 |---|---|
@@ -184,6 +184,7 @@ Five Alembic migrations:
 | `0003_auth_tables` | citext, `pending_registrations`, `users`, `auth_sessions` |
 | `0004_auth_rate_limits` | `auth_rate_limits` |
 | `0005_session_ownership` | `interview_sessions.user_id` ownership backfill |
+| `0006_retrieval_events` | `retrieval_events` (per-retrieve-call timing + result telemetry) |
 
 `0005` reads `LEGACY_SESSION_OWNER_EMAIL` once to assign pre-auth sessions an
 owner, falling back to the oldest account, and **fails loudly rather than

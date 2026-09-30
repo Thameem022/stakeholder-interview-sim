@@ -162,7 +162,7 @@ cd /opt/stakeholder-engagement-simulator/backend
 sudo -u mohammedthameem uv run alembic upgrade head
 ```
 
-You should see every migration apply in order, `0001_initial` through `0005_session_ownership`.
+You should see every migration apply in order, `0001_initial` through `0006_retrieval_events`.
 
 > **`alembic` does not load `.env`.** `alembic/env.py` falls back to the DSN in
 > `alembic.ini` (`postgres:postgres@localhost/sis`), which is not this server's
