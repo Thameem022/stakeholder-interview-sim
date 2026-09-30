@@ -30,8 +30,10 @@ from app.api.personas import router as personas_router
 from app.auth.dependencies import require_user
 from app.config import settings
 from app.db import close_pool, init_pool
+from app.realtime.recall import router as realtime_recall_router
 from app.realtime.retrieve import router as realtime_retrieve_router
 from app.realtime.token import router as realtime_token_router
+from app.realtime.world_lookup import router as realtime_world_router
 
 
 @asynccontextmanager
@@ -67,6 +69,8 @@ app.include_router(personas_router, prefix="/api", dependencies=_authenticated)
 app.include_router(eval_router, prefix="/api", dependencies=_authenticated)
 app.include_router(realtime_token_router, prefix="/api", dependencies=_authenticated)
 app.include_router(realtime_retrieve_router, prefix="/api", dependencies=_authenticated)
+app.include_router(realtime_recall_router, prefix="/api", dependencies=_authenticated)
+app.include_router(realtime_world_router, prefix="/api", dependencies=_authenticated)
 
 static_dir = Path(__file__).parent.parent / "static"
 if static_dir.exists():

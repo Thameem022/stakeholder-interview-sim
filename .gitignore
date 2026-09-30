@@ -55,3 +55,6 @@ docs/
 # kept -- they carry the provenance every report cites.
 backend/evals/.cache/
 backend/evals/runs/**/records.jsonl
+
+# Embedding cache for scripts/load_knowledge.py (regenerable, content-keyed)
+backend/.knowledge_cache/

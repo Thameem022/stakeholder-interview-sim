@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from functools import lru_cache
@@ -125,6 +126,25 @@ def get_settings() -> Settings:
             )
 
     return s
+
+
+# Written by scripts/load_knowledge.py, read here so a session can record which
+# corpus produced it. Absent until that script has run: returning None rather
+# than a placeholder keeps interview_sessions.corpus_version honest, since the
+# column is nullable precisely so an unstamped session can say "unknown"
+# instead of claiming a version it was never run under.
+CORPUS_VERSION_FILE = Path(__file__).resolve().parent / "knowledge" / "corpus_version.json"
+
+
+@lru_cache(maxsize=1)
+def get_corpus_version() -> str | None:
+    """The 12-hex stamp of the loaded knowledge corpus, or None if unstamped."""
+    try:
+        blob = json.loads(CORPUS_VERSION_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    version = blob.get("corpus_version")
+    return version if isinstance(version, str) and version else None
 
 
 class _SettingsProxy:

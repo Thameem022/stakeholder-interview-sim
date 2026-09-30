@@ -81,6 +81,73 @@ export const postRetrieve = async (
   return data
 }
 
+export interface RecallItem {
+  id: string
+  tier: number
+  text: string
+  earned: boolean
+}
+
+export interface RecallResult {
+  posture: 'open' | 'contracted'
+  items: RecallItem[]
+}
+
+/**
+ * Fulfillment for the model's `recall` tool.
+ *
+ * `persona_id` is deliberately not a parameter: the server reads it off the
+ * session row, so the browser cannot ask for another persona's catalogue.
+ *
+ * The shared 60s client timeout is far too generous here — this call happens
+ * mid-turn with the persona waiting to speak, so it gets its own short one.
+ * Past a few seconds the answer is worthless anyway; the caller falls back to
+ * an empty payload rather than leaving the tool call unanswered.
+ */
+export const postRecall = async (
+  sessionId: string,
+  topics: string[]
+): Promise<RecallResult> => {
+  const { data } = await apiClient.post(
+    '/api/realtime/recall',
+    { session_id: sessionId, topics },
+    // Background call during a live interview — see skipAuthRedirect.
+    { skipAuthRedirect: true, timeout: 4000 }
+  )
+  return data
+}
+
+export interface WorldItem {
+  id: string
+  heading: string
+  text: string
+}
+
+export interface WorldLookupResult {
+  items: WorldItem[]
+  path: 'entity' | 'fts' | 'vector' | 'none'
+}
+
+/**
+ * Fulfillment for the model's `world_lookup` tool.
+ *
+ * Gets a longer timeout than postRecall: two of its three lookup paths are
+ * local queries, but the third embeds the query at OpenAI, and cutting that
+ * off at 4s would turn a slow-but-useful answer into no answer.
+ */
+export const postWorldLookup = async (
+  sessionId: string,
+  query: string
+): Promise<WorldLookupResult> => {
+  const { data } = await apiClient.post(
+    '/api/realtime/world_lookup',
+    { session_id: sessionId, query },
+    // Background call during a live interview — see skipAuthRedirect.
+    { skipAuthRedirect: true, timeout: 8000 }
+  )
+  return data
+}
+
 export const postTranscript = async (
   sessionId: string,
   role: 'user' | 'assistant',

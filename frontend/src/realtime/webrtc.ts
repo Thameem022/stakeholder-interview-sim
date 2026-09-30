@@ -8,9 +8,10 @@
 // events (transcripts, tool calls). The backend is only contacted for:
 //   - the initial token mint
 //   - per-turn transcript persistence
-//   - retrieve_context tool fulfillment (RAG)
+//   - recall / world_lookup tool fulfillment (knowledge lookup)
 
-import { getRealtimeToken, postRetrieve, postTranscript } from '../api'
+import { getRealtimeToken, postRecall, postTranscript, postWorldLookup } from '../api'
+import type { RecallResult, WorldLookupResult } from '../api'
 
 export interface RealtimeCallbacks {
   onSessionReady?: (sessionId: string) => void
@@ -69,7 +70,6 @@ export class RealtimeWebRTCSession {
   private analyser: AnalyserNode | null = null
   private remoteStream: MediaStream | null = null
   private sessionId: string | null = null
-  private personaId = ''
   private assistantBuf = ''
   private toolArgsBuf: Record<string, string> = {}
   private micMuted = false
@@ -88,7 +88,6 @@ export class RealtimeWebRTCSession {
   }
 
   async connect(opts: ConnectOptions): Promise<void> {
-    this.personaId = opts.personaId
 
     const { ephemeral_key, session_id, model } = await getRealtimeToken(
       opts.personaId,
@@ -392,32 +391,101 @@ export class RealtimeWebRTCSession {
     }
   }
 
+  /**
+   * Fulfil a tool call from the model.
+   *
+   * Every path through this method ends in exactly one sendToolOutput. An
+   * unanswered function call leaves the turn open: the model waits on output
+   * that never arrives, nothing is spoken, and the student sits in silence
+   * with no indication anything is wrong. A useless answer is recoverable,
+   * so failures return an empty-but-valid payload rather than nothing.
+   */
   private async fulfillToolCall(
     callId: string,
     name: string,
     argsStr: string,
     cb: RealtimeCallbacks
   ): Promise<void> {
-    if (name !== 'retrieve_context') {
-      this.sendToolOutput(callId, '(unknown tool)')
-      return
+    // Round trip measured from here — the moment the arguments are complete —
+    // to the moment the output goes back down the data channel. That whole
+    // span is dead air in the interview, so it is the number worth watching,
+    // not the fetch alone.
+    const t0 = performance.now()
+
+    const emptyRecall: RecallResult = { posture: 'open', items: [] }
+    const emptyWorld: WorldLookupResult = { items: [], path: 'none' }
+    const empty = name === 'world_lookup' ? emptyWorld : emptyRecall
+
+    const args = ((): any => {
+      try {
+        return JSON.parse(argsStr) ?? {}
+      } catch {
+        return {}
+      }
+    })()
+
+    const bail = (reason: string): void => {
+      this.sendToolOutput(callId, JSON.stringify(empty))
+      console.info(`[${name || 'tool'}] no-op`, {
+        callId,
+        reason,
+        totalMs: Math.round(performance.now() - t0),
+      })
     }
+
+    if (name !== 'recall' && name !== 'world_lookup') return bail('unknown tool')
+    if (!this.sessionId) return bail('no session id')
+
+    let topics: string[] = []
     let query = ''
-    try {
-      query = String(JSON.parse(argsStr).query ?? '').trim()
-    } catch {}
-    if (!query) {
-      this.sendToolOutput(callId, '(empty query)')
-      return
+    if (name === 'recall') {
+      if (Array.isArray(args.topics)) {
+        topics = args.topics.map((t: unknown) => String(t)).filter(Boolean)
+      }
+      if (!topics.length) return bail('no topics')
+    } else {
+      query = String(args.query ?? '').trim()
+      if (!query) return bail('no query')
     }
+
+    console.info(`[${name}] tool call`, { callId, topics, query, argsStr })
+
+    let result: RecallResult | WorldLookupResult = empty
+    let failure: string | null = null
+    const tFetch = performance.now()
+
     try {
-      const { text } = await postRetrieve(this.personaId, query, this.sessionId)
-      this.sendToolOutput(callId, text)
+      result =
+        name === 'recall'
+          ? await postRecall(this.sessionId, topics)
+          : await postWorldLookup(this.sessionId, query)
     } catch (e: any) {
+      failure = e?.message ?? String(e)
       if (isAuthExpiry(e)) cb.onAuthExpired?.()
-      cb.onError?.(`retrieve failed: ${e?.message ?? String(e)}`)
-      this.sendToolOutput(callId, '(retrieval failed)')
+      cb.onError?.(`${name} failed: ${failure}`)
+      // result stays `empty` — the model gets a well-formed payload with
+      // nothing in it and improvises, which is what this persona would do when
+      // asked something it cannot bring to mind.
     }
+    const fetchMs = performance.now() - tFetch
+
+    this.sendToolOutput(callId, JSON.stringify(result))
+
+    const items = (result as { items?: unknown[] }).items ?? []
+    console.info(`[${name}] round trip`, {
+      callId,
+      ...(name === 'recall' ? { topics } : { query }),
+      fetchMs: Math.round(fetchMs),
+      totalMs: Math.round(performance.now() - t0),
+      items: items.length,
+      ...(name === 'world_lookup'
+        ? { path: (result as WorldLookupResult).path }
+        : {
+            earned: (result as RecallResult).items.map((i) => i.earned),
+            ids: (result as RecallResult).items.map((i) => i.id),
+          }),
+      ...(failure ? { failure } : {}),
+    })
   }
 
   private sendToolOutput(callId: string, output: string): void {

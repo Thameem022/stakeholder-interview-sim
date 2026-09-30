@@ -43,7 +43,18 @@ def cleanup_test_rows() -> None:
     ForeignKeyViolation. Because this runs on both sides of the `client`
     fixture, that failure would otherwise cascade into every later test.
     session_evaluations cascades from interview_sessions.
+
+    recall_events must go before interview_sessions, for the same reason one
+    step earlier: its FK (migration 0008) has no ON DELETE clause, so it
+    defaults to NO ACTION and blocks the session delete. retrieval_events does
+    not need a line here because its FK cascades.
     """
+    sql(
+        "DELETE FROM recall_events WHERE session_id IN "
+        "(SELECT id FROM interview_sessions WHERE user_id IN "
+        "(SELECT id FROM users WHERE email LIKE %s))",
+        (_TEST_LIKE,),
+    )
     sql(
         "DELETE FROM interview_sessions WHERE user_id IN "
         "(SELECT id FROM users WHERE email LIKE %s)",
