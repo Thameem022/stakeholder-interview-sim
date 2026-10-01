@@ -36,6 +36,11 @@ class CurrentUser:
     first_name: str
     last_name: str
     session_id: UUID
+    # Application roles beyond "student", which every signed-in account is.
+    roles: frozenset[str] = frozenset()
+
+    def has_role(self, role: str) -> bool:
+        return role in self.roles
 
 
 async def require_user(request: Request) -> CurrentUser:
@@ -72,6 +77,7 @@ async def require_user(request: Request) -> CurrentUser:
         first_name=row["first_name"],
         last_name=row["last_name"],
         session_id=row["session_id"],
+        roles=frozenset(row["roles"] or ()),
     )
 
 
@@ -123,3 +129,30 @@ def deny_session_access(
     raise auth_error(
         status.HTTP_404_NOT_FOUND, "session_not_found", "Session not found."
     )
+
+
+def require_role(*roles: str):
+    """Admit a caller holding ANY of `roles`; 403 otherwise, and audited.
+
+    403 rather than the ownership 404: these routes are not about a record the
+    caller might own, so there is nothing to hide by pretending they are absent.
+    """
+
+    async def _dep(
+        request: Request, user: Annotated[CurrentUser, Depends(require_user)]
+    ) -> CurrentUser:
+        if not any(user.has_role(r) for r in roles):
+            audit(
+                "authz.role",
+                "denied",
+                actor_user_id=user.id,
+                participant_id=user.participant_id,
+                request=request,
+                required=sorted(roles),
+            )
+            raise auth_error(
+                status.HTTP_403_FORBIDDEN, "forbidden", "You do not have access to this."
+            )
+        return user
+
+    return _dep

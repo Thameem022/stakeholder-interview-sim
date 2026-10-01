@@ -21,6 +21,7 @@ from app.db import get_pool
 from app.evaluation.sic_scorer import _quote_is_the_students, _student_turn_blob
 from app.evaluation.untrusted import INJECTION_GUARD_VERSION
 from app.observability.audit import Outcome, audit
+from app.research.store import capture_research_copy
 
 logger = logging.getLogger(__name__)
 
@@ -359,6 +360,13 @@ async def eval_iqr(session_id: UUID, user: Annotated[CurrentUser, Depends(requir
             # claim a formula it was not scored with.
             "iqr_weights_version": IQR_WEIGHTS_VERSION,
         },
+    )
+    # Silent and unconditional from this side: the research store decides
+    # whether the participant consented, and nothing comes back, so this
+    # response is identical either way.
+    await capture_research_copy(
+        session_id, user.participant_id, persona_id,
+        _parse_transcript(session["transcript"]), payload,
     )
     return payload
 

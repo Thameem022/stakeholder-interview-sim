@@ -98,6 +98,30 @@ export const getNotice = async (): Promise<PreSessionNotice> => {
   return data
 }
 
+export interface ResearchConsent {
+  enabled: boolean
+  version: string | null
+  title: string | null
+  points: string[] | null
+  yes_label: string | null
+  no_label: string | null
+  /** The student's own choice; null until they have made one. */
+  consented: boolean | null
+}
+
+export const getResearchConsent = async (): Promise<ResearchConsent> => {
+  const { data } = await apiClient.get('/api/research/consent')
+  return data
+}
+
+export const setResearchConsent = async (
+  consented: boolean,
+  version: string
+): Promise<ResearchConsent> => {
+  const { data } = await apiClient.put('/api/research/consent', { consented, version })
+  return data
+}
+
 /** The server always allocates the session id; there is no way to ask for one. */
 export const getRealtimeToken = async (
   personaId: string,

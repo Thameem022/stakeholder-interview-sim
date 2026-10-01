@@ -42,8 +42,22 @@ def cleanup_test_rows() -> None:
     ON DELETE RESTRICT, so a participant still referenced by a session or an
     account cannot go. Because this runs on both sides of the `client`
     fixture, a failure here would cascade into every later test.
-    session_evaluations and retrieval_events cascade from interview_sessions.
+    session_evaluations and retrieval_events cascade from interview_sessions;
+    research consent cascades from participants; account roles from users.
+    Research copies, export records and flags deliberately have no cascading
+    FK (they outlive the course record), so they are cleared explicitly first.
     """
+    test_users = "(SELECT id FROM identity.users WHERE email LIKE %s)"
+    test_participants = "(SELECT participant_id FROM identity.users WHERE email LIKE %s)"
+    sql(f"DELETE FROM research.session_records WHERE participant_id IN {test_participants}", (_TEST_LIKE,))
+    sql(f"DELETE FROM research.export_log WHERE requested_by_user_id IN {test_users}", (_TEST_LIKE,))
+    sql(f"DELETE FROM research.export_approvals WHERE approver_user_id IN {test_users}", (_TEST_LIKE,))
+    sql(
+        "DELETE FROM session_flags WHERE flagged_by IN "
+        f"{test_users} OR session_id IN (SELECT id FROM interview_sessions "
+        f"WHERE participant_id IN {test_participants})",
+        (_TEST_LIKE, _TEST_LIKE),
+    )
     sql(
         "DELETE FROM interview_sessions WHERE participant_id IN "
         "(SELECT participant_id FROM identity.users WHERE email LIKE %s)",
@@ -68,3 +82,11 @@ def cleanup_test_rows() -> None:
 def participant_of(user_id: str) -> str:
     """The pseudonym an account's work is keyed to."""
     return str(scalar("SELECT participant_id FROM identity.users WHERE id = %s", (user_id,)))
+
+
+def grant_role(user_id: str, role: str) -> None:
+    sql(
+        "INSERT INTO identity.account_roles (user_id, role, granted_by) "
+        "VALUES (%s, %s, 'test suite') ON CONFLICT DO NOTHING",
+        (user_id, role),
+    )

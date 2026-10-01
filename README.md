@@ -175,7 +175,7 @@ Two conventions worth knowing:
 
 ## Database
 
-Seven Alembic migrations:
+Eight Alembic migrations:
 
 | Revision | Adds |
 |---|---|
@@ -186,6 +186,7 @@ Seven Alembic migrations:
 | `0005_session_ownership` | `interview_sessions.user_id` ownership backfill |
 | `0006_retrieval_events` | `retrieval_events` (per-retrieve-call timing + result telemetry) |
 | `0007_pseudonymous_participants` | `participants`; sign-in tables moved to the restricted `identity` schema; sessions re-keyed from `user_id` to `participant_id`; pre-session notice acknowledgement |
+| `0008_research_and_incidents` | restricted `research` schema (consent, consented copies, export approvals + log); `identity.account_roles`; `session_flags`; `interview_sessions.purged_at` |
 
 ### Pseudonymous data model
 
@@ -196,6 +197,18 @@ schema, which nothing in `public` references. Database roles:
 `ses_course_reader` (instructors / study personnel — work tables only) and
 `ses_support_owner` (the only role that can read `identity`). The data stays
 **Restricted**: the mapping exists, so records remain re-linkable.
+
+### Research participation and incidents
+
+Research data (IRB-27-0033) lives in its own `research` schema, readable only
+by approved study personnel (`ses_study_personnel`); no coursework table or
+endpoint can see a consent decision. It is **off** (`RESEARCH_ENABLED=false`)
+until the consent form, DPIA and Data Governance / OGC sign-off are in place —
+and production refuses to enable it while the consent text in
+`app/research/consent.py` is the draft. Exports need a named approver's
+recorded, single-use approval, and the approver cannot be the exporter.
+Sessions can be flagged for review and purged through a flag; see
+[deploy/RUNBOOK.md](deploy/RUNBOOK.md).
 
 **Audio is never stored by SES.** It streams from the browser to the AI service
 for live transcription and the persona's replies; only the written transcript

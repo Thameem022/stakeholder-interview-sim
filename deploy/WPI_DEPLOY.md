@@ -171,13 +171,19 @@ You should see every migration apply in order, `0001_initial` through `0007_pseu
 >
 > ```bash
 > sudo -u postgres psql -c "CREATE ROLE ses_support_owner NOLOGIN;" \
->                       -c "CREATE ROLE ses_course_reader NOLOGIN;"
+>                       -c "CREATE ROLE ses_course_reader NOLOGIN;" \
+>                       -c "CREATE ROLE ses_study_personnel NOLOGIN;"
 > ```
 >
 > Grant `ses_support_owner` only to the Solution Support Owner's own login role
-> (`GRANT ses_support_owner TO <their_login>;`); instructors or study personnel
-> who need database read access get `ses_course_reader`, which cannot read the
-> `identity` schema. If the roles are created after migrating, re-run the
+> (`GRANT ses_support_owner TO <their_login>;`); instructors who need database
+> read access get `ses_course_reader`, which cannot read the `identity` or
+> `research` schemas; only the IRB's approved study personnel get
+> `ses_study_personnel` (the `research` schema).
+>
+> Application roles (instructor, study personnel, export approver, support
+> owner) are separate and granted with `scripts/grant_role.py` — see
+> [RUNBOOK.md](RUNBOOK.md#roles-in-ses). If the roles are created after migrating, re-run the
 > grants: `alembic downgrade 0006_retrieval_events && alembic upgrade head`
 > (lossless), or apply the GRANTs from the migration by hand.
 

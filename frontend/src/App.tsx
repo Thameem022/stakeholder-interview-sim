@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Route, Routes, useNavigate } from 'react-router-dom'
-import { Avatar, Header, PreSessionNotice } from './components'
+import { Avatar, Header, PreSessionNotice, ResearchConsentCard } from './components'
 import { useRealtimeSession } from './hooks/useRealtimeSession'
-import { Persona, evalIqr, getPersonas } from './api'
+import { Persona, ResearchConsent, evalIqr, getPersonas, getResearchConsent } from './api'
 import { personaMeta } from './personas'
 import ScorePage from './ScorePage'
 import { AuthProvider, useAuth } from './auth/AuthContext'
@@ -95,6 +95,10 @@ function InterviewView() {
   // The notice stands between "Start interview" and the interview itself,
   // every time.
   const [showNotice, setShowNotice] = useState(false)
+  // Research participation: asked once (per consent-text version), before the
+  // first interview, only while research is open. Never shown to anyone else.
+  const [consent, setConsent] = useState<ResearchConsent | null>(null)
+  const [changingConsent, setChangingConsent] = useState(false)
   const navigate = useNavigate()
   const { refresh } = useAuth()
 
@@ -107,7 +111,14 @@ function InterviewView() {
         if (e?.response?.status === 401) return
         setPersonasError('Could not load the stakeholder list. Please reload.')
       })
+    getResearchConsent()
+      .then(setConsent)
+      // Without an answer the step is simply not shown; nothing is captured
+      // for research without a recorded yes, so failing closed is safe.
+      .catch(() => setConsent(null))
   }, [])
+
+  const consentPending = !!consent?.enabled && consent.consented === null
 
   const session = useRealtimeSession({
     personaId: selected,
@@ -161,7 +172,16 @@ function InterviewView() {
     <div className="min-h-screen bg-white">
       <Header />
       <main className="mx-auto max-w-[1200px] px-[18px] py-8 lg:px-11 lg:py-10">
-        {!selected ? (
+        {!selected && consent && (consentPending || changingConsent) ? (
+          <ResearchConsentCard
+            consent={consent}
+            onDecided={(updated) => {
+              setConsent(updated)
+              setChangingConsent(false)
+            }}
+            onCancel={changingConsent && !consentPending ? () => setChangingConsent(false) : undefined}
+          />
+        ) : !selected ? (
           <>
             <StepKicker>Step 1 of 2</StepKicker>
             <h2 className="mt-1.5 text-[26px] font-semibold tracking-[-0.01em] text-ink lg:text-[32px]">
@@ -176,6 +196,14 @@ function InterviewView() {
                 <span className="font-plex text-[11.5px] text-muted-soft">
                   {personas.length} personas
                 </span>
+                {consent?.enabled && consent.consented !== null && (
+                  <button
+                    onClick={() => setChangingConsent(true)}
+                    className="text-[12px] text-muted underline underline-offset-[3px] hover:text-brand"
+                  >
+                    Research participation: {consent.consented ? 'taking part' : 'not taking part'} · change
+                  </button>
+                )}
                 {showViewScore && (
                   <button
                     onClick={() => navigate(`/score/${session.sessionId}`)}

@@ -59,7 +59,13 @@ async def load_session_user(
     """
     return await conn.fetchrow(
         """
-        SELECT u.id, u.participant_id, u.email, u.first_name, u.last_name, s.id AS session_id
+        SELECT u.id, u.participant_id, u.email, u.first_name, u.last_name,
+               s.id AS session_id,
+               coalesce(
+                   (SELECT array_agg(r.role ORDER BY r.role)
+                      FROM identity.account_roles r WHERE r.user_id = u.id),
+                   '{}'
+               ) AS roles
         FROM identity.auth_sessions s
         JOIN identity.users u ON u.id = s.user_id
         WHERE s.token_hash = $1

@@ -26,7 +26,9 @@ from fastapi import Depends
 from app.api.auth import router as auth_router
 from app.api.eval import router as eval_router
 from app.api.health import router as health_router
+from app.api.incidents import router as incidents_router
 from app.api.personas import router as personas_router
+from app.api.research import router as research_router
 from app.auth.csrf import CSRF_HEADER, CSRFMiddleware
 from app.auth.dependencies import require_user
 from app.config import settings
@@ -35,8 +37,10 @@ from app.observability.audit import configure_audit_logging
 from app.realtime.notice import router as realtime_notice_router
 from app.realtime.retrieve import router as realtime_retrieve_router
 from app.realtime.token import router as realtime_token_router
+from app.research.consent import check_research_gate
 
 configure_audit_logging()
+check_research_gate()
 
 
 @asynccontextmanager
@@ -80,6 +84,8 @@ app.include_router(eval_router, prefix="/api", dependencies=_authenticated)
 app.include_router(realtime_token_router, prefix="/api", dependencies=_authenticated)
 app.include_router(realtime_notice_router, prefix="/api", dependencies=_authenticated)
 app.include_router(realtime_retrieve_router, prefix="/api", dependencies=_authenticated)
+app.include_router(research_router, prefix="/api", dependencies=_authenticated)
+app.include_router(incidents_router, prefix="/api", dependencies=_authenticated)
 
 static_dir = Path(__file__).parent.parent / "static"
 if static_dir.exists():

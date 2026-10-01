@@ -44,6 +44,15 @@ class Settings(BaseSettings):
     # echoes it back in X-CSRF-Token, which a cross-site form cannot do.
     auth_csrf_cookie_name: str = "sis_csrf"
 
+    # Research participation (IRB-27-0033). OFF until the organizational gate
+    # clears: an approved FERPA consent form, a DPIA, and Data Governance / OGC
+    # sign-off. While off, no consent is asked for and nothing is copied into
+    # the research store. Production refuses to enable it with draft consent
+    # text (see app/research/consent.py).
+    research_enabled: bool = False
+    # How long a named approver's export approval stays usable.
+    research_export_approval_hours: int = 72
+
     # Security audit events (JSON lines on the "ses.audit" logger). "stdout"
     # lands in the service journal; "syslog" sends to AUDIT_SYSLOG_ADDRESS (a
     # socket path, or host:port for a forwarder); "none" disables them.
