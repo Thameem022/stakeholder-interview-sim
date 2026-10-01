@@ -426,6 +426,56 @@ sudo tail -n 100 /var/log/apache2/stakeholder-engagement-simulator_error.log
 sudo tail -n 100 /var/log/apache2/stakeholder-engagement-simulator_access.log
 ```
 
+### Retention / deletion job
+
+The schedule is enforced daily by `app/jobs/retention.py` (SR-2026-052
+SEC-RET-001), configured in `.env`:
+
+| Setting | Meaning |
+|---|---|
+| `RETENTION_TERM_END` | Last day of the term (YYYY-MM-DD, UTC). Empty = no course deletion yet. |
+| `RETENTION_COURSE_GRACE_DAYS` | Days after term end before course data is deleted (default 30). |
+| `RETENTION_TELEMETRY_DAYS` | Days RAG query telemetry is kept (default 30). |
+| `RETENTION_RESEARCH_UNTIL` | The research protocol's end date. Empty = research data retained. |
+
+Only records from on or before the term end are deleted, so a stale
+`RETENTION_TERM_END` cannot touch the next term. Sessions under an **open**
+incident flag are held until the flag is reviewed or purged.
+
+Install the timer once:
+
+```bash
+sudo cp deploy/systemd/stakeholder-engagement-simulator-retention.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now stakeholder-engagement-simulator-retention.timer
+systemctl list-timers stakeholder-engagement-simulator-retention.timer
+```
+
+Check what a run would do before setting a term end for the first time:
+
+```bash
+cd /opt/stakeholder-engagement-simulator/backend
+sudo -u mohammedthameem .venv/bin/python -m app.jobs.retention --dry-run   # reads the install .env
+```
+
+Every run (including dry runs and failures) writes a row to `deletion_log` and
+an `admin.retention_run` audit event. A failed run exits non-zero, so the unit
+shows `failed`:
+
+```bash
+sudo journalctl -u stakeholder-engagement-simulator-retention -n 50 --no-pager
+psql ... -c "SELECT started_at, status, counts FROM deletion_log ORDER BY started_at DESC LIMIT 5;"
+```
+
+**Backups must expire on the same schedule** (SEC-RET-001: "backups expire on
+the same schedule"). Backup retention is deployment configuration, not code:
+set the backup rotation so that no backup outlives
+`RETENTION_COURSE_GRACE_DAYS` after the term end. In practice, keep daily
+backups for no longer than the grace period. Otherwise deleted course data
+survives in backups. Record the rotation setting in the solution document.
+Purges done through incident flags have the same backup caveat (see
+[RUNBOOK.md](RUNBOOK.md#purging-a-flagged-session)).
+
 ### Security audit events
 
 Security-relevant events are written as one JSON object per line on a dedicated

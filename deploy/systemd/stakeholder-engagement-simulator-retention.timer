@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily run of the SES retention / deletion job
+
+[Timer]
+# Overnight, outside the teaching day. Persistent: a run missed while the VM
+# was down happens at next boot rather than being skipped.
+OnCalendar=*-*-* 03:15:00
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

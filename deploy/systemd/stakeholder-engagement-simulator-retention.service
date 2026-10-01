@@ -1,0 +1,18 @@
+[Unit]
+Description=Stakeholder Engagement Simulator — retention / deletion job (SEC-RET-001)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=oneshot
+User=mohammedthameem
+Group=www-data
+WorkingDirectory=/opt/stakeholder-engagement-simulator/backend
+EnvironmentFile=/opt/stakeholder-engagement-simulator/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=UV_PROJECT_ENVIRONMENT=/opt/stakeholder-engagement-simulator/backend/.venv
+
+# Enforces the schedule in .env (RETENTION_*), writes one deletion_log row and
+# one audit event per run, and exits non-zero on failure so the unit shows as
+# failed (and alerts, where unit failures are monitored).
+ExecStart=/opt/stakeholder-engagement-simulator/backend/.venv/bin/python -m app.jobs.retention

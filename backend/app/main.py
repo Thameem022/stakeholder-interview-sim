@@ -25,6 +25,7 @@ from fastapi import Depends
 
 from app.api.auth import router as auth_router
 from app.api.eval import router as eval_router
+from app.api.export import router as export_router
 from app.api.health import router as health_router
 from app.api.incidents import router as incidents_router
 from app.api.personas import router as personas_router
@@ -86,6 +87,7 @@ app.include_router(realtime_notice_router, prefix="/api", dependencies=_authenti
 app.include_router(realtime_retrieve_router, prefix="/api", dependencies=_authenticated)
 app.include_router(research_router, prefix="/api", dependencies=_authenticated)
 app.include_router(incidents_router, prefix="/api", dependencies=_authenticated)
+app.include_router(export_router, prefix="/api", dependencies=_authenticated)
 
 static_dir = Path(__file__).parent.parent / "static"
 if static_dir.exists():

@@ -60,11 +60,13 @@ function Collapsible({ label, children }: { label: string; children: React.React
 interface ScoreReportProps {
   evaluation: SessionEvaluation;
   onClose?: () => void;
+  /** Enables the download links; omitted where the report is shown without one. */
+  sessionId?: string;
 }
 
 type Tab = 'interview' | 'learned';
 
-export default function ScoreReport({ evaluation, onClose }: ScoreReportProps) {
+export default function ScoreReport({ evaluation, onClose, sessionId }: ScoreReportProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('interview');
 
@@ -117,6 +119,26 @@ export default function ScoreReport({ evaluation, onClose }: ScoreReportProps) {
             {persona.fullName}
             {persona.roleTitle ? ` · ${persona.roleTitle}` : ''}
           </span>
+          {/* Students submit their own materials outside SES; these are their
+              copies. Plain links: a same-origin GET carries the session. */}
+          {sessionId && (
+            <span style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.8rem' }}>
+              <a
+                href={`/api/export/sessions/${encodeURIComponent(sessionId)}`}
+                download
+                style={{ color: T.textMuted, fontWeight: 600, textDecoration: 'underline' }}
+              >
+                Download this interview (.zip)
+              </a>
+              <a
+                href="/api/export/me"
+                download
+                style={{ color: T.textMuted, fontWeight: 600, textDecoration: 'underline' }}
+              >
+                Download all my interviews
+              </a>
+            </span>
+          )}
         </div>
 
         {/* Tabs */}

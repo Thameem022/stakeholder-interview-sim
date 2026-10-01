@@ -155,3 +155,19 @@ sudo -u mohammedthameem uv run python -m scripts.grant_role \
 
 Remove roles at term end (`--revoke`). Once sign-in moves to Entra ID, these
 come from Entra app-role assignments instead.
+
+---
+
+## End of term
+
+1. Set `RETENTION_TERM_END` in `.env` to the term's last day (and adjust
+   `RETENTION_COURSE_GRACE_DAYS` if the course needs longer to settle grades
+   outside SES). Run a `--dry-run` and check the counts look right.
+2. Close or purge any open flags. Sessions under an open flag are held back
+   from deletion.
+3. Revoke app roles that should not carry into the next term
+   (`scripts/grant_role.py --revoke`). Staff accounts are not deleted by the
+   job.
+4. After the grace period, confirm the run in `deletion_log` shows the course
+   data deleted, and that backups older than the cutoff have rotated out.
+

@@ -53,6 +53,19 @@ class Settings(BaseSettings):
     # How long a named approver's export approval stays usable.
     research_export_approval_hours: int = 72
 
+    # Retention schedule (SEC-RET-001), enforced by app/jobs/retention.py.
+    # Course data (interviews, feedback, and the sign-in <-> pseudonym mapping)
+    # from a term is deleted RETENTION_COURSE_GRACE_DAYS after that term's end.
+    # Empty term end = no course deletion yet. Only records from on or before
+    # the term end are touched, so a forgotten setting never eats a new term.
+    retention_term_end: str = ""
+    retention_course_grace_days: int = 30
+    # RAG query telemetry is operational: a short window, any time of term.
+    retention_telemetry_days: int = 30
+    # Research copies and consent: kept until the protocol's end date (empty =
+    # retained under the protocol; the job never touches them).
+    retention_research_until: str = ""
+
     # Security audit events (JSON lines on the "ses.audit" logger). "stdout"
     # lands in the service journal; "syslog" sends to AUDIT_SYSLOG_ADDRESS (a
     # socket path, or host:port for a forwarder); "none" disables them.

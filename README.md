@@ -175,7 +175,7 @@ Two conventions worth knowing:
 
 ## Database
 
-Eight Alembic migrations:
+Nine Alembic migrations:
 
 | Revision | Adds |
 |---|---|
@@ -187,6 +187,7 @@ Eight Alembic migrations:
 | `0006_retrieval_events` | `retrieval_events` (per-retrieve-call timing + result telemetry) |
 | `0007_pseudonymous_participants` | `participants`; sign-in tables moved to the restricted `identity` schema; sessions re-keyed from `user_id` to `participant_id`; pre-session notice acknowledgement |
 | `0008_research_and_incidents` | restricted `research` schema (consent, consented copies, export approvals + log); `identity.account_roles`; `session_flags`; `interview_sessions.purged_at` |
+| `0009_retention` | `deletion_log`; research consent no longer cascades from course participants |
 
 ### Pseudonymous data model
 
@@ -209,6 +210,15 @@ and production refuses to enable it while the consent text in
 recorded, single-use approval, and the approver cannot be the exporter.
 Sessions can be flagged for review and purged through a flag; see
 [deploy/RUNBOOK.md](deploy/RUNBOOK.md).
+
+### Retention and self-export
+
+A daily job (`python -m app.jobs.retention`, systemd timer in `deploy/systemd/`)
+enforces the retention schedule configured by `RETENTION_*` in `.env`: course
+data and the identity mapping go a set period after term end, query telemetry
+on a short window, research data only at the protocol's end. Every run writes a
+`deletion_log` row. Students download their own transcripts and feedback as a
+zip from the score report (`/api/export/...`); SES does no grading.
 
 **Audio is never stored by SES.** It streams from the browser to the AI service
 for live transcription and the persona's replies; only the written transcript

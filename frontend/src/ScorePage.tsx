@@ -90,5 +90,5 @@ export default function ScorePage() {
     )
   }
 
-  return <ScoreReport evaluation={evaluation} onClose={goBack} />
+  return <ScoreReport evaluation={evaluation} onClose={goBack} sessionId={sessionId} />
 }
