@@ -3,7 +3,7 @@ build_world_chunks.py
 
 Slim version of build_world_index.py — produces world_bible_chunks.json
 WITHOUT torch/faiss/sentence-transformers. Embedding happens later in
-embed_and_load.py via OpenAI text-embedding-3-small.
+embed_and_load.py via Amazon Titan Text Embeddings V2 on Bedrock.
 
 The chunking logic is ported verbatim from build_world_index.py:
 - Heading-aware paragraph chunking

@@ -39,7 +39,7 @@ def sha256_obj(obj: Any) -> str:
 def call_key(**parts: Any) -> str:
     """Identity of one LLM call.
 
-    Callers pass: scorer, model, temperature, prompt_sha, rubric_sha, schema_sha,
+    Callers pass: scorer, model, effort, prompt_sha, rubric_sha, schema_sha,
     transcript_sha, persona_id, run_idx. harness_version is added here so no
     caller can forget it.
     """

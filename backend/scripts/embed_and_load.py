@@ -1,7 +1,8 @@
 """
 embed_and_load.py — one-shot seed for pgvector store.
 
-Loads three chunk sources, embeds each with OpenAI text-embedding-3-small,
+Loads three chunk sources, embeds each with Amazon Titan Text Embeddings V2 on
+Bedrock (app/ai/embeddings.py — AWS credentials from the standard chain),
 and inserts into the persona_chunks and world_bible_chunks tables.
 
 Sources:
@@ -14,6 +15,9 @@ Idempotent: TRUNCATEs both tables before insert.
 
 Usage:
     uv run python scripts/embed_and_load.py
+
+Run after migration 0011 (which empties the chunk tables for the new 1024-
+dimension Titan vectors) and whenever the corpora change.
 """
 
 from __future__ import annotations
@@ -27,27 +31,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
 import asyncpg
-import tiktoken
-from openai import APIStatusError, AsyncOpenAI
 from pgvector.asyncpg import register_vector
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from app.ai.embeddings import embed_texts
 from app.rag.context import build_persona_dossier_chunks, build_persona_facts, resolve_persona_record
 
 SEED_DIR = Path(__file__).parent / "seed_data"
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-EMBEDDING_BATCH = 100
-# text-embedding-3-small accepts up to 8192 tokens. Leave headroom for safety.
-MAX_TOKENS = 8000
-
-_encoder = tiktoken.get_encoding("cl100k_base")
-
-
-def _truncate_to_tokens(text: str, max_tokens: int = MAX_TOKENS) -> str:
-    tokens = _encoder.encode(text)
-    if len(tokens) <= max_tokens:
-        return text
-    return _encoder.decode(tokens[:max_tokens])
+EMBEDDING_BATCH = 64
 
 CORPUS_FILES = {
     "climate skeptics": "corpus_climate skeptics.json",
@@ -59,55 +50,35 @@ CORPUS_FILES = {
 DOSSIER_PERSONAS = ["developer", "municipal_planner", "small_business_owner", "waterfront_resident"]
 
 
-async def embed_batch(client: AsyncOpenAI, texts: Sequence[str]) -> List[List[float]]:
-    """Embed a batch. Retry only on transient errors (429, 5xx); fail fast on 400."""
-    delay = 1.0
-    for attempt in range(6):
+async def embed_batch(texts: Sequence[str]) -> List[List[float]]:
+    """Embed a batch. botocore already retries throttling and 5xx adaptively;
+    this outer loop covers a longer outage. A validation error fails fast."""
+    delay = 2.0
+    for attempt in range(4):
         try:
-            resp = await client.embeddings.create(model=EMBEDDING_MODEL, input=list(texts))
-            return [item.embedding for item in resp.data]
-        except APIStatusError as e:
-            # 400 = bad request (oversized input, malformed). Don't retry.
-            if e.status_code == 400:
-                raise
-            if attempt == 5:
-                raise
-            print(f"  Embedding attempt {attempt + 1} failed ({e.status_code}): {e}; retrying in {delay}s")
-            await asyncio.sleep(delay)
-            delay *= 2
+            return await embed_texts(list(texts))
         except Exception as e:
-            if attempt == 5:
+            if type(e).__name__ in ("ValidationException", "ValueError") or attempt == 3:
                 raise
-            print(f"  Embedding attempt {attempt + 1} failed: {e}; retrying in {delay}s")
+            print(f"  Embedding attempt {attempt + 1} failed ({type(e).__name__}); retrying in {delay}s")
             await asyncio.sleep(delay)
             delay *= 2
     raise RuntimeError("unreachable")
 
 
-async def embed_all(client: AsyncOpenAI, texts: List[str]) -> List[List[float]]:
-    # Pre-truncate any oversized texts before batching (OpenAI hard limit 8192 tokens).
-    truncated = []
-    n_truncated = 0
-    for t in texts:
-        before = len(_encoder.encode(t))
-        if before > MAX_TOKENS:
-            n_truncated += 1
-            truncated.append(_truncate_to_tokens(t))
-        else:
-            truncated.append(t)
-    if n_truncated:
-        print(f"  Truncated {n_truncated} oversized chunk(s) to {MAX_TOKENS} tokens")
-
+async def embed_all(texts: List[str]) -> List[List[float]]:
+    # Titan V2 takes up to 8,192 tokens per input; app/ai/embeddings.py caps
+    # each text well inside that, so no pre-truncation pass is needed here.
     out: List[List[float]] = []
-    total_batches = (len(truncated) + EMBEDDING_BATCH - 1) // EMBEDDING_BATCH
-    for i in range(0, len(truncated), EMBEDDING_BATCH):
-        batch = truncated[i : i + EMBEDDING_BATCH]
+    total_batches = (len(texts) + EMBEDDING_BATCH - 1) // EMBEDDING_BATCH
+    for i in range(0, len(texts), EMBEDDING_BATCH):
+        batch = texts[i : i + EMBEDDING_BATCH]
         print(f"  Embedding batch {i // EMBEDDING_BATCH + 1}/{total_batches} ({len(batch)} items)")
-        out.extend(await embed_batch(client, batch))
+        out.extend(await embed_batch(batch))
     return out
 
 
-async def seed_corpus(conn: asyncpg.Connection, client: AsyncOpenAI) -> int:
+async def seed_corpus(conn: asyncpg.Connection) -> int:
     total = 0
     for persona_slug, filename in CORPUS_FILES.items():
         path = SEED_DIR / filename
@@ -119,7 +90,7 @@ async def seed_corpus(conn: asyncpg.Connection, client: AsyncOpenAI) -> int:
         print(f"  Loading {persona_slug}: {len(records)} chunks from {filename}")
 
         texts = [r.get("page_content", "") for r in records]
-        embeddings = await embed_all(client, texts)
+        embeddings = await embed_all(texts)
 
         rows = []
         for idx, (record, vec) in enumerate(zip(records, embeddings)):
@@ -138,7 +109,7 @@ async def seed_corpus(conn: asyncpg.Connection, client: AsyncOpenAI) -> int:
     return total
 
 
-async def seed_dossier_and_facts(conn: asyncpg.Connection, client: AsyncOpenAI) -> tuple[int, int]:
+async def seed_dossier_and_facts(conn: asyncpg.Connection) -> tuple[int, int]:
     dossier_total = 0
     facts_total = 0
 
@@ -156,7 +127,7 @@ async def seed_dossier_and_facts(conn: asyncpg.Connection, client: AsyncOpenAI) 
 
         if dossier_chunks:
             texts = [c["text"] for c in dossier_chunks]
-            embeddings = await embed_all(client, texts)
+            embeddings = await embed_all(texts)
             rows = [
                 (
                     persona_key,
@@ -179,7 +150,7 @@ async def seed_dossier_and_facts(conn: asyncpg.Connection, client: AsyncOpenAI) 
 
         if fact_chunks:
             texts = [c["text"] for c in fact_chunks]
-            embeddings = await embed_all(client, texts)
+            embeddings = await embed_all(texts)
             rows = [
                 (
                     persona_key,
@@ -203,7 +174,7 @@ async def seed_dossier_and_facts(conn: asyncpg.Connection, client: AsyncOpenAI) 
     return dossier_total, facts_total
 
 
-async def seed_world_bible(conn: asyncpg.Connection, client: AsyncOpenAI) -> int:
+async def seed_world_bible(conn: asyncpg.Connection) -> int:
     path = SEED_DIR / "world_bible_chunks.json"
     if not path.exists():
         print(f"  Skip world bible: {path} not found")
@@ -213,7 +184,7 @@ async def seed_world_bible(conn: asyncpg.Connection, client: AsyncOpenAI) -> int
     print(f"  Loading world bible: {len(chunks)} chunks")
 
     texts = [c.get("text", "") for c in chunks]
-    embeddings = await embed_all(client, texts)
+    embeddings = await embed_all(texts)
 
     rows = []
     for c, vec in zip(chunks, embeddings):
@@ -247,11 +218,6 @@ async def main() -> None:
     dsn = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/sis")
     dsn = dsn.replace("postgresql+asyncpg://", "postgresql://")
 
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY environment variable required")
-
-    client = AsyncOpenAI(api_key=api_key)
     conn = await asyncpg.connect(dsn)
 
     # Safety net: ensure pgvector extension exists before registering type codec.
@@ -267,13 +233,13 @@ async def main() -> None:
         await conn.execute("TRUNCATE world_bible_chunks RESTART IDENTITY")
 
         print("\n[1/3] Seeding corpus chunks...")
-        corpus_count = await seed_corpus(conn, client)
+        corpus_count = await seed_corpus(conn)
 
         print("\n[2/3] Seeding persona dossier + facts chunks...")
-        dossier_count, facts_count = await seed_dossier_and_facts(conn, client)
+        dossier_count, facts_count = await seed_dossier_and_facts(conn)
 
         print("\n[3/3] Seeding world bible chunks...")
-        world_count = await seed_world_bible(conn, client)
+        world_count = await seed_world_bible(conn)
 
         elapsed = time.time() - start
         print("\n=== Seed complete ===")

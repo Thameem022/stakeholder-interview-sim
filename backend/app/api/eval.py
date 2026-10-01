@@ -11,15 +11,18 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.ai import guardrails
 from app.auth.dependencies import (
     CurrentUser,
     deny_session_access,
     rate_limited,
     require_user,
 )
+from app.config import settings
 from app.db import get_pool
 from app.evaluation.sic_scorer import _quote_is_the_students, _student_turn_blob
 from app.evaluation.untrusted import INJECTION_GUARD_VERSION
+from app.incidents.flags import flag_session
 from app.observability.audit import Outcome, audit
 from app.research.store import capture_research_copy
 
@@ -27,11 +30,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Two gpt-4o calls over a full transcript — the most expensive request in the
+# Two Claude scoring calls over a full transcript — the most expensive request in the
 # app. One per interview is normal use; this is roughly ten times that.
 _IQR_LIMIT = ("eval-iqr", 20, 3600)
 
-# One gpt-4o call. No frontend caller, so any traffic here is ad-hoc.
+# One Claude scoring call. No frontend caller, so any traffic here is ad-hoc.
 _SIC_LIMIT = ("eval-sic", 20, 3600)
 
 
@@ -153,6 +156,21 @@ def _reconcile_moments_with_coverage(payload: dict[str, Any]) -> None:
         moment["out_of_reach_state"] = state
 
 
+def _feedback_text(payload: dict[str, Any]) -> str:
+    """Every string the report shows, for the guardrail check."""
+    parts: list[str] = []
+    for d in payload.get("dimensions") or []:
+        parts.append(str(d.get("assessment") or ""))
+    for m in payload.get("moments") or []:
+        parts.extend(str(m.get(k) or "") for k in (
+            "headline", "persona_offered", "what_it_produced", "outcome",
+            "technique_name", "technique_stem",
+        ))
+    for tier in payload.get("insight_coverage") or []:
+        parts.extend(str(tier.get(k) or "") for k in ("consequence_text", "quick_win", "actionable_tip"))
+    return "\n".join(p for p in parts if p)
+
+
 def _drop_moments_with_unverified_quotes(payload: dict[str, Any], turns: list[dict]) -> None:
     """Remove any moment whose student_quote the student never said.
 
@@ -176,11 +194,13 @@ def _drop_moments_with_unverified_quotes(payload: dict[str, Any], turns: list[di
 
 
 SCORER_METADATA = {
-    "iqr_model": "gpt-4o",
-    "iqr_fallback_model": "gpt-4o-mini",
-    "sic_model": "gpt-4o",
-    "sic_fallback_model": "gpt-4o-mini",
-    "scorer_version": "1.0",
+    "provider": "aws-bedrock",
+    "iqr_model": settings.bedrock_scoring_model,
+    "iqr_fallback_model": settings.bedrock_scoring_fallback_model,
+    "sic_model": settings.bedrock_scoring_model,
+    "sic_fallback_model": settings.bedrock_scoring_fallback_model,
+    "scoring_effort": settings.bedrock_scoring_effort,
+    "scorer_version": "2.0",
     "injection_guard_version": INJECTION_GUARD_VERSION,
     # Set by the deployment (see deploy/). "unknown" locally, which is honest:
     # a row that cannot name the code that produced it should say so.
@@ -342,6 +362,29 @@ async def eval_iqr(session_id: UUID, user: Annotated[CurrentUser, Depends(requir
     _drop_moments_with_unverified_quotes(payload, turns)
     _reconcile_moments_with_coverage(payload)
     _normalize_payload_for_display(payload)
+
+    # Bedrock Guardrails on what the student is about to read. Harmful
+    # feedback is not stored or shown: the session is flagged for review
+    # (the transcript stays for the reviewer) and the student is told so.
+    verdict = await guardrails.check(_feedback_text(payload), "OUTPUT")
+    if verdict.intervened:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            await flag_session(
+                conn, session_id, source="guardrail", reason="harmful_ai_output",
+                note="Guardrail intervened on scoring feedback: " + ", ".join(verdict.policies),
+            )
+        audit(
+            "ai.guardrail", "denied", actor_user_id=user.id, participant_id=user.participant_id,
+            session_id=session_id, stage="feedback", policies=list(verdict.policies),
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "feedback_under_review",
+                "message": "Your feedback needs a quick review before it can be shown.",
+            },
+        )
 
     await _persist_evaluation(
         session_id,

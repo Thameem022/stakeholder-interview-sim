@@ -3,15 +3,16 @@
 Collection reuses the B1 script with a different model:
 
     uv run --group evals python -m evals.scripts.02_repeat_stability \
-        --n 15 --model gpt-4o-mini --max-usd 3
+        --n 15 --model anthropic.claude-sonnet-5-5 --max-usd 3
 
 Then this analyses the two runs together:
 
     uv run --group evals python -m evals.scripts.03_model_agreement
 
-This is not an abstract model comparison. Both scorers fall back to
-gpt-4o-mini on any exception, so this measures the consequence of a code path
-that is live in production.
+This is not an abstract model comparison. Both scorers fall back to the
+configured fallback model (BEDROCK_SCORING_FALLBACK_MODEL) on a transient error
+or a refusal, so this measures the consequence of a code path that is live in
+production.
 """
 
 from __future__ import annotations
@@ -20,6 +21,8 @@ import argparse
 
 import numpy as np
 import pandas as pd
+
+from app.config import settings
 from scipy import stats as sps
 from sklearn.metrics import cohen_kappa_score
 
@@ -62,8 +65,8 @@ def agreement_row(a: pd.Series, b: pd.Series, label: str) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="B2 model agreement")
-    parser.add_argument("--primary", default="gpt-4o")
-    parser.add_argument("--secondary", default="gpt-4o-mini")
+    parser.add_argument("--primary", default=settings.bedrock_scoring_model)
+    parser.add_argument("--secondary", default=settings.bedrock_scoring_fallback_model)
     parser.add_argument("--name", default="b1_stability")
     args = parser.parse_args()
 
@@ -176,7 +179,7 @@ def main() -> int:
         rate = success[(success.model == args.secondary) & (success.scorer == "iqr")].success_rate.iloc[0]
         verdict = (
             f"the IQR fallback is not a degraded judge, it is a broken one — `{args.secondary}` "
-            f"produced schema-valid output on only {rate:.1%} of calls. When gpt-4o errors, the "
+            f"produced schema-valid output on only {rate:.1%} of calls. When the primary errors, the "
             "student does not get a slightly worse grade; they get an HTTP 500"
         )
     elif rho_corr >= 0.95 and abs(bias) < 0.3 and qwk >= 0.85:
@@ -217,11 +220,11 @@ def main() -> int:
             "combined_spend_usd": round(sum(m.get("spent_usd", 0) for m in manifests.values()), 4),
         }),
         section("Question",
-                "Both scorers fall back to `gpt-4o-mini` on any exception. What does a student "
+                f"Both scorers fall back to `{args.secondary}` on a transient error or refusal. What does a student "
                 "lose on the runs that take that path?"),
         section("Method",
                 f"The same {paired.shape[0]} transcripts were scored 15 times by each model at "
-                "temperature 0 with fallback disabled. Matching the repeat count matters: it makes "
+                "a fixed effort level with fallback disabled. Matching the repeat count matters: it makes "
                 "each model's own test-retest reliability available, which the correction below "
                 "requires. Agreement is reported on run medians and on single runs, because a "
                 "single run is what a student actually receives."),

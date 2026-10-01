@@ -17,6 +17,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from app.config import settings
+
 from app.evaluation.sic_scorer import SIC_KEYS_DIR, _compute_status_for_tier
 from evals.lib.report import (
     header_block,
@@ -241,7 +243,7 @@ def main() -> int:
     # Defaulting to None would resolve to whichever run finished most recently —
     # after a B2 collection that is the secondary model, and the analysis would
     # silently describe a different study under this one's name.
-    parser.add_argument("--model", default="gpt-4o",
+    parser.add_argument("--model", default=settings.bedrock_scoring_model,
                         help="model whose run to analyse; pass '' to take the latest of any model")
     args = parser.parse_args()
 
@@ -278,7 +280,8 @@ def main() -> int:
     # Operational health.
     errors = int(records.error.notna().sum()) if "error" in records else 0
     fallbacks = int((records.model_used != manifest.get("config", {}).get("model")).sum())
-    fingerprints = sorted(set(records.system_fingerprint.dropna()))
+    # Bedrock returns no serving fingerprint; which model answered is model_used.
+    served_by = sorted(set(records.model_used.dropna())) if "model_used" in records else []
 
     # Does instability concentrate anywhere?
     per_transcript = (overall.groupby("transcript_id")
@@ -331,8 +334,8 @@ def main() -> int:
                 "and is a single run enough to grade a student on?"),
         section("Method",
                 f"Each of the {long.transcript_id.nunique()} graded transcripts was scored "
-                f"{n_runs} times by `{manifest.get('config', {}).get('model')}` at temperature 0 with "
-                "the fallback to gpt-4o-mini disabled, so every judgement is attributable to the "
+                f"{n_runs} times by `{manifest.get('config', {}).get('model')}` at a fixed effort level "
+                "with the fallback disabled, so every judgement is attributable to the "
                 "primary model. Transcripts were sanitized once before both scorers, exactly as the "
                 "production endpoint does. SIC went through `grade_raw`, which returns per-item "
                 "labels and skips the cosmetic enrichment call.",
@@ -401,13 +404,13 @@ def main() -> int:
         section("Operational health",
                 f"- Errors: {errors} of {len(records)} calls",
                 f"- Silent fallbacks to the secondary model: {fallbacks} (strict mode should make this 0)",
-                f"- `system_fingerprint` values seen: {len(fingerprints)} — {', '.join(fingerprints) or 'none reported'}",
+                f"- Models that answered: {', '.join(served_by) or 'none recorded'}",
                 f"- Spend: ${manifest.get('spent_usd', 0):.4f} over {manifest.get('api_calls')} API calls",
                 f"- Median call latency: {records.latency_ms.median():.0f} ms "
                 f"(p95 {records.latency_ms.quantile(0.95):.0f} ms)",
                 "",
-                "More than one fingerprint means part of the measured spread is OpenAI's serving "
-                "backend changing under the run rather than the judge itself."),
+                "More than one model listed means some calls were served by a model other than "
+                "the one under study, and the spread is not attributable to it alone."),
         section("Caveats",
                 "- All 16 transcripts predate commit `ceef62d` and the v2 prompt (`51f2e82`), so "
                 "they were produced by an older persona build. This bounds how far the figure "

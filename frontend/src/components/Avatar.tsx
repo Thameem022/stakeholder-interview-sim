@@ -179,8 +179,8 @@ export function Avatar({ audioStream, active, personaId, personaName }: AvatarPr
     }
   }, [personaId])
 
-  // Feed the OpenAI Realtime remote track into HeadAudio for viseme detection.
-  // Playback stays on the session's own <audio> element, so we must NOT route
+  // Feed the persona's audio stream into HeadAudio for viseme detection.
+  // Playback stays on the session's own audio graph, so we must NOT route
   // this into TalkingHead's speaker path (that would double the audio).
   //
   // A HeadAudio node has 0 outputs, so `source → headaudio` is a dead-end

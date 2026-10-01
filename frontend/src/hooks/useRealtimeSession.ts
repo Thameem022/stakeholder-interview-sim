@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { RealtimeWebRTCSession } from '../realtime/webrtc'
+import { RealtimeStreamSession } from '../realtime/streamSession'
 
 export type SessionStatus = 'idle' | 'connecting' | 'live' | 'ending'
 
@@ -35,7 +35,7 @@ export function useRealtimeSession(opts: UseRealtimeSessionOptions): RealtimeSes
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null)
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
 
-  const sessionRef = useRef<RealtimeWebRTCSession | null>(null)
+  const sessionRef = useRef<RealtimeStreamSession | null>(null)
 
   // Held in a ref so an inline callback from the caller doesn't re-create
   // `start` on every render.
@@ -84,7 +84,7 @@ export function useRealtimeSession(opts: UseRealtimeSessionOptions): RealtimeSes
     setUserTranscript('')
     setAssistantTranscript('')
 
-    const sess = new RealtimeWebRTCSession()
+    const sess = new RealtimeStreamSession()
     sessionRef.current = sess
 
     try {
@@ -102,6 +102,19 @@ export function useRealtimeSession(opts: UseRealtimeSessionOptions): RealtimeSes
           },
           onAssistantSpeakingChange: (speaking) => setIsAssistantSpeaking(speaking),
           onError: (msg) => setError(msg),
+          onEnded: (reason) => {
+            // The server ended it: time limit, a safety review, or a lost
+            // connection. The transcript is already saved server-side.
+            cleanup()
+            setStatus('idle')
+            setError(
+              reason === 'guardrail'
+                ? 'The interview was stopped and flagged for review.'
+                : reason === 'time_limit'
+                  ? 'The interview reached its time limit.'
+                  : 'The interview connection ended.'
+            )
+          },
           onAuthExpired: () => {
             // Stop the connection (and the microphone) first, then let the
             // app redirect. The other order leaves a live mic on a route the

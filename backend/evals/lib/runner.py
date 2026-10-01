@@ -60,7 +60,8 @@ class RunConfig:
     concurrency: int = 8
     max_usd: float = 20.0
     max_attempts: int = 4
-    temperature: float = 0.0
+    # Claude takes no temperature; the effort level is what is held fixed.
+    effort: str = ""
 
 
 class BudgetExceeded(RuntimeError):

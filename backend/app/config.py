@@ -2,6 +2,7 @@ import logging
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlsplit
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -11,7 +12,7 @@ def _find_env_file() -> str:
     """Look for .env in backend/ first, then the repo root (one level up).
 
     Without this, starting uvicorn from `backend/` silently ignores the root
-    `.env` and OPENAI_API_KEY ends up empty.
+    `.env` and every setting silently falls back to its default.
     """
     backend_dir = Path(__file__).resolve().parent.parent
     candidates = [backend_dir / ".env", backend_dir.parent / ".env"]
@@ -26,11 +27,36 @@ class Settings(BaseSettings):
         env_file=_find_env_file(), env_file_encoding="utf-8", extra="ignore"
     )
 
-    openai_api_key: str = ""
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/sis"
-    openai_realtime_model: str = "gpt-realtime"
-    embedding_model: str = "text-embedding-3-small"
     port: int = 8000
+
+    # --- AI: Amazon Bedrock, direct (SR-2026-052 SEC-AI-001) ------------------
+    # Credentials come ONLY from the standard AWS chain: an assumed role, STS,
+    # IAM Roles Anywhere (credential_process), or vault-issued temporary
+    # credentials. Never a key in .env, in source, or in the browser.
+    aws_region: str = "us-east-1"
+    # Rubric scoring: Claude on Bedrock (Messages API endpoint, official SDK).
+    bedrock_scoring_model: str = "anthropic.claude-opus-5-5"
+    # Used when the primary errors or declines (client-side refusal fallback).
+    bedrock_scoring_fallback_model: str = "anthropic.claude-sonnet-5-5"
+    # The cosmetic per-tier "consequence" text on the coverage report.
+    bedrock_enrichment_model: str = "anthropic.claude-sonnet-5-5"
+    # Thinking depth for scoring. Opus 5.5 accepts no temperature; effort is
+    # fixed here so runs are comparable, and recorded with every evaluation.
+    bedrock_scoring_effort: Literal["low", "medium", "high", "xhigh", "max"] = "high"
+    # Retrieval embeddings: Amazon Titan Text Embeddings V2.
+    bedrock_embedding_model_id: str = "amazon.titan-embed-text-v2:0"
+    bedrock_embedding_dimensions: int = 1024
+    # Live voice persona: Amazon Nova Sonic, bidirectional stream via the backend.
+    bedrock_speech_model_id: str = "amazon.nova-sonic-v1:0"
+    # Nova Sonic caps one stream's lifetime; the proxy renews before this many
+    # seconds, carrying the conversation over, at the next turn boundary.
+    nova_sonic_stream_renew_seconds: int = 420
+    realtime_max_session_minutes: int = 30
+    # Bedrock Guardrails, applied to persona speech, student turns and feedback.
+    # Required in production.
+    bedrock_guardrail_id: str = ""
+    bedrock_guardrail_version: str = "DRAFT"
 
     # "dev" or "prod". Gates cookie Secure and the production boot checks.
     environment: str = "dev"
@@ -168,16 +194,27 @@ def check_sso(s: Settings) -> None:
         raise RuntimeError("ENTRA_REDIRECT_URI must be https:// in production.")
 
 
+def check_aws(s: Settings) -> None:
+    """Production gets AWS credentials from a role or the vault, never a stored
+    key, and always has a guardrail. A long-term access key (an access key id
+    without a session token) in the environment refuses the boot."""
+    if not s.is_production:
+        return
+    if os.environ.get("AWS_ACCESS_KEY_ID") and not os.environ.get("AWS_SESSION_TOKEN"):
+        raise RuntimeError(
+            "A long-term AWS access key is set in the environment. Production must "
+            "use short-lived credentials (role / STS / vault); see deploy/WPI_DEPLOY.md."
+        )
+    if not s.bedrock_guardrail_id:
+        raise RuntimeError("ENVIRONMENT=prod needs BEDROCK_GUARDRAIL_ID.")
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     s = Settings()
     check_cors_origins(s)
     check_sso(s)
-    # Bridge loaded values into os.environ so libraries that read directly
-    # (langchain ChatOpenAI, openai SDK, scorers using os.getenv) all see them.
-    # Do not overwrite values the user already set in their shell.
-    if s.openai_api_key and not os.environ.get("OPENAI_API_KEY"):
-        os.environ["OPENAI_API_KEY"] = s.openai_api_key
+    check_aws(s)
 
     if not s.sso_configured:
         logging.getLogger(__name__).warning(

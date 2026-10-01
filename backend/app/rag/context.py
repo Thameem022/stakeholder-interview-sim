@@ -2,7 +2,7 @@
 Persona dossier + facts chunking, ported verbatim from rag_engine.py.
 
 These functions produce the *exact same chunk text* as the original system.
-Only the embedding/retrieval transport changes (FAISS → pgvector + OpenAI).
+Only the embedding/retrieval transport changes (FAISS → pgvector + Titan on Bedrock).
 """
 
 from __future__ import annotations

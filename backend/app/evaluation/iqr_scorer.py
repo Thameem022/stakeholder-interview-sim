@@ -2,16 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Optional
 
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.output_parsers import PydanticOutputParser
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-from pydantic import SecretStr
-
+from app.ai.claude import ClaudeOnBedrock, StructuredLLM
+from app.config import settings
+from app.evaluation.generation import generate_with_fallback
 from app.evaluation.iqr_schema import SessionEvaluation, Transcript
 from app.evaluation.untrusted import (
     INJECTION_GUARD_VERSION,
@@ -182,42 +178,35 @@ def _transcript_json_for_prompt(transcript: Transcript) -> str:
     return json.dumps(safe.model_dump(), ensure_ascii=False, indent=2)
 
 
-def _build_llm(model: str = "gpt-4o", temperature: float = 0.0) -> BaseChatModel:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY environment variable is required for IQR scoring.")
-    return ChatOpenAI(model=model, temperature=temperature, api_key=SecretStr(api_key))
-
-
 class IQRScorer:
     """
     Scores an interview transcript using the Interview Quality Rubric (IQR).
 
-    Wraps a LangChain OpenAI chat model and the IQR system prompt to produce
-    structured SessionEvaluation outputs from an input Transcript.
+    Sends the IQR system prompt and the (neutralised) transcript to Claude on
+    Bedrock (app/ai/claude.py) and validates the reply as a SessionEvaluation.
+    The judge's overall score is replaced by the weighted formula in code.
     """
 
     def __init__(
         self,
         prompt_path: Optional[str] = None,
-        model: str = "gpt-4o",
-        fallback_model: str = "gpt-4o-mini",
+        model: Optional[str] = None,
+        fallback_model: Optional[str] = None,
         allow_fallback: bool = True,
-        temperature: float = 0.0,
+        llm: Optional[StructuredLLM] = None,
     ) -> None:
         self._prompt_path = Path(prompt_path) if prompt_path else DEFAULT_PROMPT_PATH
         if not self._prompt_path.is_file():
             raise FileNotFoundError(f"IQR system prompt not found at: {self._prompt_path}")
         self._system_prompt = self._prompt_path.read_text(encoding="utf-8")
-        self._model = model
-        self._fallback_model = fallback_model
+        self._model = model or settings.bedrock_scoring_model
+        self._fallback_model = fallback_model or settings.bedrock_scoring_fallback_model
         # Evaluation runs set this False: a silent downgrade to the fallback model
         # would otherwise be recorded as a measurement of the primary one.
         self._allow_fallback = allow_fallback
-        self._temperature = temperature
-        self._llm = _build_llm(model, temperature)
-        self._parser = PydanticOutputParser(pydantic_object=SessionEvaluation)
-        self._chain = self._build_chain(self._llm)
+        self._llm: StructuredLLM = llm or ClaudeOnBedrock(
+            refusal_fallback=self._fallback_model if allow_fallback else None
+        )
         # Set by evaluate(); None until the first call.
         self.last_model_used: Optional[str] = None
         self.last_error: Optional[str] = None
@@ -227,27 +216,34 @@ class IQRScorer:
         """Version directory the active system prompt was loaded from, e.g. "v2"."""
         return self._prompt_path.parent.name
 
-    def _build_chain(self, llm: BaseChatModel):
-        prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    "{system_prompt}\n\n{injection_notice}\n\n{persona_header}\n\n{persona_rapport_anchors}\n\n{motifs_context}\n\n"
-                    "{catalogue_items}\n\n{do_not_recommend}\n\n{format_instructions}",
-                ),
-                (
-                    "user",
-                    (
-                        "Evaluate the following interview transcript and return "
-                        "a single JSON object matching the `SessionEvaluation` schema.\n\n"
-                        "Transcript JSON:\n```json\n{transcript_json}\n```"
-                    ),
-                ),
-            ]
+    def build_messages(self, transcript: Transcript, persona_id: str) -> tuple[str, str]:
+        """(system, user) exactly as the judge receives them."""
+        sic_key = _read_sic_key(persona_id)
+        motifs = _load_strong_interview_motifs(sic_key)
+        if motifs:
+            motifs_context = (
+                "STRONG INTERVIEW MOTIFS — name these specifically when the student"
+                " reached them, rather than defaulting to generic 'probe deeper on"
+                " ethics' language:\n"
+                + "\n".join(f"  - {m}" for m in motifs)
+            )
+        else:
+            motifs_context = ""
+        system = (
+            f"{self._system_prompt}\n\n{UNTRUSTED_TRANSCRIPT_NOTICE}\n\n"
+            f"{_build_persona_header(sic_key)}\n\n{_load_rapport_anchors_block(persona_id)}\n\n"
+            f"{motifs_context}\n\n{_build_catalogue_block(sic_key)}\n\n"
+            f"{_build_do_not_recommend_block(sic_key)}"
         )
-        return prompt | llm | self._parser
+        user = (
+            "Evaluate the following interview transcript and return "
+            "a single JSON object matching the `SessionEvaluation` schema.\n\n"
+            f"Transcript JSON:\n```json\n{_transcript_json_for_prompt(transcript)}\n```"
+        )
+        return system, user
 
     async def evaluate(self, transcript: Transcript, config: Optional[dict] = None) -> SessionEvaluation:
+        """`config` may carry {"usage": Usage} to accumulate token usage (eval harness)."""
         # Reset per call so an inspecting caller never reads a previous run's values.
         self.last_model_used = None
         self.last_error = None
@@ -267,47 +263,16 @@ class IQRScorer:
         for key in ("session_id", "persona_id", "scenario_id"):
             base_metadata.setdefault(key, base_metadata.get(key))
 
-        transcript_json = _transcript_json_for_prompt(transcript)
-
         persona_id: str = str(base_metadata.get("persona_key") or base_metadata.get("persona_id") or "")
-        sic_key = _read_sic_key(persona_id)
-        motifs = _load_strong_interview_motifs(sic_key)
-        if motifs:
-            motifs_context = (
-                "STRONG INTERVIEW MOTIFS — name these specifically when the student"
-                " reached them, rather than defaulting to generic 'probe deeper on"
-                " ethics' language:\n"
-                + "\n".join(f"  - {m}" for m in motifs)
-            )
-        else:
-            motifs_context = ""
+        system, user = self.build_messages(transcript, persona_id)
 
-        persona_rapport_anchors = _load_rapport_anchors_block(persona_id)
-
-        chain_input = {
-            "system_prompt": self._system_prompt,
-            "injection_notice": UNTRUSTED_TRANSCRIPT_NOTICE,
-            "persona_header": _build_persona_header(sic_key),
-            "persona_rapport_anchors": persona_rapport_anchors,
-            "motifs_context": motifs_context,
-            "catalogue_items": _build_catalogue_block(sic_key),
-            "do_not_recommend": _build_do_not_recommend_block(sic_key),
-            "format_instructions": self._parser.get_format_instructions(),
-            "transcript_json": transcript_json,
-        }
-
-        self.last_model_used = self._model
-        try:
-            result: SessionEvaluation = await self._chain.ainvoke(chain_input, config=config)
-        except Exception as e:
-            # Record what went wrong before deciding whether to retry — an
-            # unrecorded downgrade makes the run unattributable afterwards.
-            self.last_error = f"{type(e).__name__}: {e}"
-            if not self._allow_fallback:
-                raise
-            fallback_chain = self._build_chain(_build_llm(self._fallback_model, self._temperature))
-            result = await fallback_chain.ainvoke(chain_input, config=config)
-            self.last_model_used = self._fallback_model
+        outcome, self.last_error = await generate_with_fallback(
+            self._llm, model=self._model, fallback_model=self._fallback_model,
+            allow_fallback=self._allow_fallback, system=system, user=user,
+            schema=SessionEvaluation, usage=(config or {}).get("usage"),
+        )
+        result: SessionEvaluation = outcome.value
+        self.last_model_used = outcome.model
 
         # The judge's own overall_score is advisory; the formula in code is the
         # number the student sees and the number the eval harness measures.
@@ -319,6 +284,7 @@ class IQRScorer:
             **base_metadata,
             **result.metadata,
             "judge_model": self.last_model_used,
+            "judge_effort": settings.bedrock_scoring_effort,
             "prompt_version": self.prompt_version,
             "iqr_weights_version": IQR_WEIGHTS_VERSION,
             "injection_guard_version": INJECTION_GUARD_VERSION,

@@ -35,6 +35,7 @@ from app.auth.dependencies import require_user
 from app.config import settings
 from app.db import close_pool, init_pool
 from app.observability.audit import configure_audit_logging
+from app.realtime.bedrock_proxy import router as realtime_stream_router
 from app.realtime.notice import router as realtime_notice_router
 from app.realtime.retrieve import router as realtime_retrieve_router
 from app.realtime.token import router as realtime_token_router
@@ -88,6 +89,10 @@ app.include_router(realtime_retrieve_router, prefix="/api", dependencies=_authen
 app.include_router(research_router, prefix="/api", dependencies=_authenticated)
 app.include_router(incidents_router, prefix="/api", dependencies=_authenticated)
 app.include_router(export_router, prefix="/api", dependencies=_authenticated)
+# The live-interview WebSocket authenticates itself (session cookie, Origin,
+# single-use stream token): router dependencies take an HTTP Request, which a
+# WebSocket handshake does not provide.
+app.include_router(realtime_stream_router, prefix="/api")
 
 static_dir = Path(__file__).parent.parent / "static"
 if static_dir.exists():

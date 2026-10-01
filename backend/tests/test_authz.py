@@ -188,17 +188,9 @@ def test_token_mint_cannot_target_an_existing_session(
     still sends the field, because a stale frontend bundle would: Pydantic
     ignores unknown fields, so it must reach nothing.
 
-    OpenAI is stubbed out. The session row is written before that call, so
-    everything under test here still happens — and the suite stays offline and
-    free to run.
+    The mint now creates a brand-new session and a stream token for it; the
+    id sent by the client must never be touched.
     """
-    import httpx
-
-    async def _no_network(*args, **kwargs):
-        raise httpx.ConnectError("blocked in tests")
-
-    monkeypatch.setattr(httpx.AsyncClient, "post", _no_network)
-
     client, user_a, email_b, _ = two_users
     original = '[{"role": "user", "text": "mine", "timestamp": "2026-01-01T00:00:00Z"}]'
     sid = owned_session(user_a, transcript=original)
@@ -212,7 +204,8 @@ def test_token_mint_cannot_target_an_existing_session(
             "notice_version": NOTICE_VERSION,
         },
     )
-    assert r.status_code == 502, "expected the stubbed OpenAI call to fail the mint"
+    assert r.status_code == 200, r.text
+    assert r.json()["session_id"] != str(sid)
 
     assert "mine" in scalar(
         "SELECT transcript::text FROM interview_sessions WHERE id = %s", (str(sid),)

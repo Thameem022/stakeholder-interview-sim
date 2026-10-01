@@ -11,7 +11,6 @@ import json
 import logging
 import uuid
 
-import httpx
 import pytest
 
 from app.config import get_settings, settings
@@ -167,11 +166,7 @@ def test_touching_another_participants_session_is_audited(
 # --- AI request/response metadata --------------------------------------------
 
 
-def test_realtime_session_mint_is_audited(logged_in_client, monkeypatch, audit_log):
-    async def _ok(*args, **kwargs):
-        return httpx.Response(200, json={"value": "ek_test_not_real"})
-
-    monkeypatch.setattr(httpx.AsyncClient, "post", _ok)
+def test_starting_an_interview_is_audited_without_the_stream_token(logged_in_client, audit_log):
     client, user_id = logged_in_client
     r = client.post("/api/realtime/token", json={"persona_id": "alex_martinez", "notice_version": NOTICE_VERSION})
     assert r.status_code == 200, r.text
@@ -179,20 +174,9 @@ def test_realtime_session_mint_is_audited(logged_in_client, monkeypatch, audit_l
     (event,) = audit_log.named("ai.realtime_session")
     assert event["outcome"] == "success" and event["actor_user_id"] == user_id
     assert event["session_id"] == r.json()["session_id"]
-    assert event["model"] == settings.openai_realtime_model
-    assert isinstance(event["latency_ms"], int)
-    _no_pii(audit_log, "ek_test_not_real")
-
-
-def test_a_failed_realtime_mint_is_audited(logged_in_client, monkeypatch, audit_log):
-    async def _down(*args, **kwargs):
-        raise httpx.ConnectError("blocked in tests")
-
-    monkeypatch.setattr(httpx.AsyncClient, "post", _down)
-    client, _ = logged_in_client
-    client.post("/api/realtime/token", json={"persona_id": "alex_martinez", "notice_version": NOTICE_VERSION})
-    (event,) = audit_log.named("ai.realtime_session")
-    assert event["outcome"] == "failure" and event["error_type"] == "ConnectError"
+    assert event["model"] == settings.bedrock_speech_model_id
+    assert event["stage"] == "token_issued"
+    _no_pii(audit_log, r.json()["stream_token"])
 
 
 def test_retrieval_is_audited_without_the_query(
@@ -224,7 +208,7 @@ def test_retrieval_is_audited_without_the_query(
     (event,) = audit_log.named("ai.retrieve")
     assert event["outcome"] == "success" and event["actor_user_id"] == user_id
     assert event["persona_hits"] == 1 and event["world_hits"] == 0
-    assert event["embedding_model"] == settings.embedding_model
+    assert event["embedding_model"] == settings.bedrock_embedding_model_id
     _no_pii(audit_log, SECRET)
 
 

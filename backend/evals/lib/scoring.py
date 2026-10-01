@@ -3,8 +3,9 @@
 Wraps IQRScorer / SICScorer for evaluation use. Three things differ from the
 production call path:
 
-  * allow_fallback=False — a silent downgrade to gpt-4o-mini would otherwise be
-    recorded as a measurement of gpt-4o.
+  * allow_fallback=False — a silent downgrade to the fallback model would
+    otherwise be recorded as a measurement of the primary one (and with it off,
+    refusals are not rerouted either).
   * SIC goes through grade_raw(), which returns the per-item labels the
     statistics need and skips the cosmetic enrichment call evaluate() makes.
   * Every call is costed and timed, so a run's spend is measured rather than
@@ -14,10 +15,10 @@ production call path:
 from __future__ import annotations
 
 import time
-from typing import Any, Optional
+from typing import Optional
 
-from langchain_core.callbacks import BaseCallbackHandler
-
+from app.ai.claude import Usage
+from app.config import settings
 from app.evaluation.iqr_schema import SessionEvaluation, Transcript
 from app.evaluation.iqr_scorer import DEFAULT_PROMPT_PATH, IQRScorer
 from app.evaluation.sic_scorer import (
@@ -28,77 +29,41 @@ from app.evaluation.sic_scorer import (
 )
 from evals.lib.cache import sha256_file, sha256_obj
 
-# USD per 1M tokens. Cached input is billed at half rate on both models, and the
-# stable system-prompt prefix means most repeat runs hit that discount.
+# USD per 1M tokens — Anthropic's published first-party rates, used as an
+# ESTIMATE for budget guards. Claude on Amazon Bedrock is billed by AWS at its
+# own rates; use the AWS bill, not this table, for actual spend.
 PRICING = {
-    "gpt-4o":                 {"in": 2.50, "cached_in": 1.25, "out": 10.00},
-    "gpt-4o-mini":            {"in": 0.15, "cached_in": 0.075, "out": 0.60},
-    "text-embedding-3-small": {"in": 0.02, "cached_in": 0.02, "out": 0.0},
+    "anthropic.claude-opus-5-5":   {"in": 4.00, "cached_in": 0.20, "cache_write": 5.00, "out": 20.00},
+    "anthropic.claude-sonnet-5-5": {"in": 2.00, "cached_in": 0.20, "cache_write": 2.50, "out": 10.00},
 }
 
 
-class UsageCollector(BaseCallbackHandler):
-    """Captures token usage and the serving fingerprint for every LLM call.
-
-    Two shapes have to be handled. The IQR chain ends in a PydanticOutputParser
-    and populates llm_output["token_usage"]; the SIC chain uses
-    with_structured_output, where usage usually arrives on the message as
-    usage_metadata instead. Reading only one of them yields a column of zeros
-    that is not noticed until the study is over.
-    """
+class UsageCollector:
+    """Token usage across every call a scorer makes for one evaluation."""
 
     def __init__(self) -> None:
-        self.prompt_tokens = 0
-        self.completion_tokens = 0
-        self.cached_tokens = 0
-        self.fingerprints: list[Optional[str]] = []
-        self.calls = 0
-
-    def on_llm_end(self, response, **kwargs: Any) -> None:  # noqa: ANN001
-        self.calls += 1
-        out = getattr(response, "llm_output", None) or {}
-        usage = dict(out.get("token_usage") or {})
-
-        if not usage:
-            try:
-                message = response.generations[0][0].message
-                meta = getattr(message, "usage_metadata", None) or {}
-                usage = {
-                    "prompt_tokens": meta.get("input_tokens", 0),
-                    "completion_tokens": meta.get("output_tokens", 0),
-                    "prompt_tokens_details": {
-                        "cached_tokens": (meta.get("input_token_details") or {}).get("cache_read", 0)
-                    },
-                }
-            except (AttributeError, IndexError):
-                usage = {}
-
-        self.prompt_tokens += int(usage.get("prompt_tokens") or 0)
-        self.completion_tokens += int(usage.get("completion_tokens") or 0)
-        details = usage.get("prompt_tokens_details") or {}
-        if hasattr(details, "get"):
-            self.cached_tokens += int(details.get("cached_tokens") or 0)
-        self.fingerprints.append(out.get("system_fingerprint"))
+        self.usage = Usage()
 
     def cost_usd(self, model: str) -> float:
         rates = PRICING.get(model)
         if not rates:
             return 0.0
-        fresh = max(self.prompt_tokens - self.cached_tokens, 0)
+        u = self.usage
         return (
-            fresh * rates["in"] / 1e6
-            + self.cached_tokens * rates["cached_in"] / 1e6
-            + self.completion_tokens * rates["out"] / 1e6
+            u.input_tokens * rates["in"] / 1e6
+            + u.cache_read_input_tokens * rates["cached_in"] / 1e6
+            + u.cache_creation_input_tokens * rates["cache_write"] / 1e6
+            + u.output_tokens * rates["out"] / 1e6
         )
 
     def as_dict(self, model: str) -> dict:
+        u = self.usage
         return {
-            "prompt_tokens": self.prompt_tokens,
-            "completion_tokens": self.completion_tokens,
-            "cached_tokens": self.cached_tokens,
-            "cost_usd": round(self.cost_usd(model), 6),
-            "system_fingerprint": self.fingerprints[0] if self.fingerprints else None,
-            "llm_calls": self.calls,
+            "prompt_tokens": u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens,
+            "completion_tokens": u.output_tokens,
+            "cached_tokens": u.cache_read_input_tokens,
+            "cost_usd": round(self.cost_usd(model), 6),  # an estimate; see PRICING
+            "llm_calls": u.calls,
         }
 
 
@@ -127,15 +92,17 @@ def sic_schema_sha() -> str:
 
 # ── Scoring calls ────────────────────────────────────────────────────────────
 
-def make_scorers(model: str, temperature: float = 0.0) -> tuple[IQRScorer, SICScorer]:
+def make_scorers(model: Optional[str] = None) -> tuple[IQRScorer, SICScorer]:
     """One scorer pair per model, shared across a whole run.
 
     The async clients are safe to reuse, and rebuilding them per call would
-    re-read the prompt files hundreds of times for nothing.
+    re-read the prompt files hundreds of times for nothing. Claude Opus 5.5
+    takes no temperature; the run's effort level is BEDROCK_SCORING_EFFORT.
     """
+    model = model or settings.bedrock_scoring_model
     return (
-        IQRScorer(model=model, allow_fallback=False, temperature=temperature),
-        SICScorer(model=model, allow_fallback=False, temperature=temperature),
+        IQRScorer(model=model, allow_fallback=False),
+        SICScorer(model=model, allow_fallback=False),
     )
 
 
@@ -145,7 +112,7 @@ async def score_iqr(scorer: IQRScorer, transcript: Transcript) -> dict:
     error: Optional[str] = None
     result: Optional[dict] = None
     try:
-        evaluation = await scorer.evaluate(transcript, config={"callbacks": [collector]})
+        evaluation = await scorer.evaluate(transcript, config={"usage": collector.usage})
         result = evaluation.model_dump()
     except Exception as e:
         error = f"{type(e).__name__}: {e}"
@@ -165,7 +132,7 @@ async def score_sic(scorer: SICScorer, persona_id: str, turns: list[dict]) -> di
     error: Optional[str] = None
     result: Optional[dict] = None
     try:
-        grading = await scorer.grade_raw(persona_id, turns, config={"callbacks": [collector]})
+        grading = await scorer.grade_raw(persona_id, turns, config={"usage": collector.usage})
         result = grading.model_dump()
     except Exception as e:
         error = f"{type(e).__name__}: {e}"

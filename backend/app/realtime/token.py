@@ -1,64 +1,39 @@
-"""
-Realtime ephemeral-token mint endpoint.
+"""Start an interview: create the session and issue a stream token.
 
-Builds the full Realtime session config (persona instructions, voice, server VAD,
-the `retrieve_context` tool) and exchanges the long-lived OPENAI_API_KEY for a
-short-lived ephemeral key the browser uses for the WebRTC SDP exchange.
+SR-2026-052 items 1.1 / 1.6. The browser never receives an AI-provider
+credential of any kind. It gets a short-lived, single-use token that opens
+the backend's own audio stream (/api/realtime/stream, app/realtime/bedrock_proxy.py);
+the backend holds the AWS credentials and talks to Bedrock.
 
-The browser never sees OPENAI_API_KEY.
+The token is bound to the session and its participant, lives 60 seconds, and
+is consumed when the stream opens. Only its hash is stored.
 """
 
 from __future__ import annotations
 
-import logging
-from datetime import datetime
-from time import perf_counter
-from typing import Annotated, Any, Dict, Optional
+import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
+from typing import Annotated, Optional
 from uuid import uuid4
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from app.auth.dependencies import CurrentUser, rate_limited, require_user
 from app.config import settings
+from app.db import get_pool
 from app.observability.audit import audit
-from app.personas.prompt_assembly import build_persona_system_prompt
-from app.personas.voices import VOICE_MAP
+from app.personas.voices import DEFAULT_VOICE, VOICE_MAP
 from app.realtime.notice import NOTICE_VERSION
 from app.realtime.session import InterviewSession
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter()
 
-OPENAI_CLIENT_SECRETS_URL = "https://api.openai.com/v1/realtime/client_secrets"
-
-# Each mint is a credential good for a whole realtime session — the highest
-# cost per call in the app. One interview needs one; the headroom absorbs
-# dropped connections and microphone-permission retries.
+# One interview needs one; the headroom absorbs dropped connections and
+# microphone-permission retries.
 _TOKEN_LIMIT = ("realtime-token", 30, 3600)
-
-RETRIEVE_TOOL: Dict[str, Any] = {
-    "type": "function",
-    "name": "retrieve_context",
-    "description": (
-        "Look up grounded facts about this stakeholder persona or about the "
-        "Harbortown world. Call this whenever the user asks a specific factual "
-        "question — names, places, plans, history, statistics, opinions on file. "
-        "Skip for greetings and small talk."
-    ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "query": {
-                "type": "string",
-                "description": "Concise search query summarizing what to look up",
-            }
-        },
-        "required": ["query"],
-    },
-}
+STREAM_TOKEN_TTL = timedelta(seconds=60)
 
 
 class TokenRequest(BaseModel):
@@ -66,13 +41,8 @@ class TokenRequest(BaseModel):
     voice_id: Optional[str] = None
     # There is deliberately no `session_id` here. It used to be accepted and
     # fed straight into an upsert, so passing someone else's id wiped their
-    # transcript. No client has ever sent it, so the field is simply gone
-    # rather than guarded; Pydantic ignores unknown fields, so a stale bundle
-    # sending one is a no-op rather than a 422.
-    #
-    # TODO(remove after one release cycle): legacy field kept so cached
-    # frontend bundles don't 422 mid-rollout. The simulator now always runs
-    # in no-barge-in mode regardless of this value.
+    # transcript. Pydantic ignores unknown fields, so a stale bundle sending
+    # one is a no-op rather than a 422.
     turn_based: Optional[bool] = None
     # The pre-session notice version the student acknowledged. Must match the
     # current one (app/realtime/notice.py) or no interview starts.
@@ -80,50 +50,14 @@ class TokenRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    ephemeral_key: str
     session_id: str
-    model: str
+    stream_token: str
+    expires_in: int
+    voice_id: str
 
 
-def _build_session_config(persona_id: str, voice_id: str) -> Dict[str, Any]:
-    instructions = build_persona_system_prompt(persona_id)
-
-    # No-barge-in turn detection. interrupt_response=false means user audio
-    # during the assistant's turn is ignored server-side, so the persona can
-    # never be cut off. Combined with the browser-side mic gating in
-    # webrtc.ts, this guarantees clean turn-taking.
-    turn_detection: Dict[str, Any] = {
-        "type": "server_vad",
-        "threshold": 0.95,
-        "prefix_padding_ms": 400,
-        "silence_duration_ms": 1500,
-        "create_response": True,
-        "interrupt_response": False,
-    }
-
-    return {
-        "type": "realtime",
-        "model": settings.openai_realtime_model,
-        "instructions": instructions,
-        "output_modalities": ["audio"],
-        "audio": {
-            "input": {
-                "format": {"type": "audio/pcm", "rate": 24000},
-                "transcription": {"model": "whisper-1"},
-                "turn_detection": turn_detection,
-            },
-            "output": {
-                "format": {"type": "audio/pcm", "rate": 24000},
-                "voice": voice_id,
-                # ~20% slower than default. Realtime API supports 0.25–1.5;
-                # applied between turns, not mid-response. Gives students a bit
-                # more processing time on dense answers (item 7).
-                "speed": 0.9,
-            },
-        },
-        "tools": [RETRIEVE_TOOL],
-        "tool_choice": "auto",
-    }
+def hash_stream_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 @router.post(
@@ -137,8 +71,8 @@ async def mint_token(
     if not req.persona_id:
         raise HTTPException(status_code=400, detail="persona_id required")
 
-    # Enforced here, not just in the UI: no session row, no credential, until
-    # the current notice has been acknowledged.
+    # Enforced here, not just in the UI: no session row, no token, until the
+    # current notice has been acknowledged.
     if req.notice_version != NOTICE_VERSION:
         audit(
             "interview.notice", "denied", actor_user_id=user.id,
@@ -153,72 +87,41 @@ async def mint_token(
             },
         )
 
-    sid = uuid4()
-    voice_id = req.voice_id or VOICE_MAP.get(req.persona_id, "alloy")
-    session_config = _build_session_config(req.persona_id, voice_id)
+    # Only voices this deployment has chosen; a client cannot name others.
+    persona_voice = VOICE_MAP.get(req.persona_id, DEFAULT_VOICE)
+    voice_id = req.voice_id if req.voice_id in set(VOICE_MAP.values()) else persona_voice
 
-    # The session row is written before the OpenAI call, not after: an ephemeral
-    # key is billable, so it should not be minted for a request that is about to
-    # fail on our side.
+    sid = uuid4()
     session = InterviewSession(
         id=sid,
         participant_id=user.participant_id,
         notice_version=req.notice_version,
         persona_id=req.persona_id,
         voice_id=voice_id,
-        started_at=datetime.utcnow(),
+        started_at=datetime.now(timezone.utc),
     )
     await session.create()
 
-    def _audit_mint(outcome, **fields) -> None:
-        audit(
-            "ai.realtime_session", outcome, actor_user_id=user.id,
-            participant_id=user.participant_id,
-            session_id=sid, persona_id=req.persona_id, voice_id=voice_id,
-            model=settings.openai_realtime_model,
-            latency_ms=round((perf_counter() - started) * 1000), **fields,
+    token = secrets.token_urlsafe(32)
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO realtime_stream_tokens (token_hash, session_id, participant_id, expires_at)
+            VALUES ($1, $2, $3, $4)
+            """,
+            hash_stream_token(token), sid, user.participant_id,
+            datetime.now(timezone.utc) + STREAM_TOKEN_TTL,
         )
 
-    started = perf_counter()
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        try:
-            resp = await client.post(
-                OPENAI_CLIENT_SECRETS_URL,
-                headers={
-                    "Authorization": f"Bearer {settings.openai_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={"session": session_config},
-            )
-        except httpx.HTTPError as e:
-            logger.exception(f"openai client_secrets transport error: {e}")
-            _audit_mint("failure", error_type=type(e).__name__)
-            raise HTTPException(status_code=502, detail=f"openai transport error: {e}")
-
-    if resp.status_code >= 400:
-        _audit_mint("failure", provider_status=resp.status_code)
-        logger.error(
-            f"openai client_secrets {resp.status_code}: {resp.text[:400]}"
-        )
-        raise HTTPException(
-            status_code=502,
-            detail=f"openai client_secrets failed: {resp.status_code}",
-        )
-
-    data = resp.json()
-    ephemeral_key = data.get("value")
-    if not ephemeral_key:
-        _audit_mint("failure", error_type="missing_ephemeral_key")
-        logger.error(f"openai client_secrets missing 'value': {data}")
-        raise HTTPException(status_code=502, detail="openai response missing ephemeral key")
-
-    _audit_mint("success")
-    logger.info(
-        f"minted ephemeral key for session={sid} persona={req.persona_id} "
-        f"participant={user.participant_id}"
+    audit(
+        "ai.realtime_session", "success", actor_user_id=user.id,
+        participant_id=user.participant_id, session_id=sid, persona_id=req.persona_id,
+        voice_id=voice_id, model=settings.bedrock_speech_model_id, stage="token_issued",
     )
     return TokenResponse(
-        ephemeral_key=ephemeral_key,
         session_id=str(sid),
-        model=settings.openai_realtime_model,
+        stream_token=token,
+        expires_in=int(STREAM_TOKEN_TTL.total_seconds()),
+        voice_id=voice_id,
     )

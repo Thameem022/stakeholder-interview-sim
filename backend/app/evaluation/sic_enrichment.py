@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
-import os
 from typing import Dict, List, Optional
 
-from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field
+
+from app.ai.claude import ClaudeOnBedrock, StructuredLLM
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,7 @@ def _item_state(item: dict) -> str:
 async def enrich_sic_results(
     tier_coverages: List[dict],
     tier_metadata: Dict[str, dict],
+    llm: Optional[StructuredLLM] = None,
 ) -> Optional[SICEnrichmentResult]:
     """Generate the per-tier "why it matters" consequence line.
 
@@ -98,11 +100,6 @@ async def enrich_sic_results(
     Returns None if the LLM call fails — callers should treat this as
     non-fatal and fall back to tier_metadata.why_it_matters.
     """
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        logger.warning("OPENAI_API_KEY not set; skipping SIC enrichment")
-        return None
-
     user_lines: list[str] = []
     for tc in tier_coverages:
         tier_num = tc["tier"]
@@ -122,18 +119,16 @@ async def enrich_sic_results(
     user_message = "\n".join(user_lines)
 
     try:
-        llm = ChatOpenAI(
-            model="gpt-4o-mini",
-            temperature=0.2,
-            api_key=SecretStr(api_key),
+        # Cosmetic display text, so the smaller configured model and no
+        # fallback: on any failure the report shows the authored text instead.
+        result = await (llm or ClaudeOnBedrock()).generate(
+            model=settings.bedrock_enrichment_model,
+            system=_ENRICHMENT_SYSTEM_PROMPT,
+            user=user_message,
+            schema=SICEnrichmentResult,
+            max_tokens=4000,
         )
-        structured_llm = llm.with_structured_output(SICEnrichmentResult)
-        result = await structured_llm.ainvoke([
-            {"role": "system", "content": _ENRICHMENT_SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
-        ])
-        # Validate rather than trust the structured-output wrapper's shape.
-        return SICEnrichmentResult.model_validate(result)
+        return result.value
     except Exception as e:
         # Type only: the exception text can carry the model's output, which
         # quotes the interview. Transcript content stays out of the logs.

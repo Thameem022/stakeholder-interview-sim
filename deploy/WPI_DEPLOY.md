@@ -18,12 +18,12 @@ Deploy this repo to the WPI Ubuntu VM that also hosts `interviewsimulator.wpi.ed
 ## Architecture on the VM
 
 - **Apache 2.4** terminates HTTPS for both hostnames; each vhost reverse-proxies HTTP to its own uvicorn (`127.0.0.1:8000` for the old app, `127.0.0.1:8001` for the new app).
-- **No WebSocket proxy.** The realtime audio loop is **WebRTC**, browser ↔ OpenAI directly. The backend never sits in the audio path. Apache only needs `mod_proxy_http` (no `mod_proxy_wstunnel`).
+- **One WebSocket route.** The live interview streams audio browser ↔ SES over `wss://…/api/realtime/stream`, and the backend relays it to Amazon Bedrock (Nova Sonic). Apache needs `mod_proxy_http` and `mod_proxy_wstunnel`; see `deploy/apache/`.
 - **uvicorn** runs FastAPI on `127.0.0.1:8001`.
 - **PostgreSQL 16 + pgvector** runs locally on `127.0.0.1:5432`; this app needs its own database (`sis` user / `sis` database). The old app does not use Postgres, so there's no conflict.
 - **uv** manages the Python venv at `/opt/stakeholder-engagement-simulator/backend/.venv`.
 - The backend serves the built React frontend from `backend/static/` (the build step copies `frontend/dist` → `backend/static`).
-- **Outbound HTTPS/WSS to `api.openai.com` must be allowed** by the campus firewall — required for OpenAI Realtime (WebRTC SDP exchange and the data channel) and for the embedding API used by RAG.
+- **Outbound HTTPS from the VM** must be allowed to Entra ID (`login.microsoftonline.com`) and to the AWS endpoints in `AWS_REGION`: `bedrock-runtime.<region>.amazonaws.com` (Nova Sonic, Titan, Guardrails), `bedrock-mantle.<region>.api.aws` (Claude), and, with IAM Roles Anywhere, `rolesanywhere.<region>.amazonaws.com`. Browsers only ever connect to the SES hostname.
 
 ## Server layout
 
@@ -139,12 +139,18 @@ sudo chown mohammedthameem:mohammedthameem /opt/stakeholder-engagement-simulator
 Required variables:
 
 ```env
-OPENAI_API_KEY=sk-...
 DATABASE_URL=postgresql+asyncpg://sis:CHANGE_ME_STRONG_PASSWORD@127.0.0.1:5432/sis
-OPENAI_REALTIME_MODEL=gpt-realtime
-EMBEDDING_MODEL=text-embedding-3-small
 PORT=8001
+AWS_REGION=us-east-1
+AWS_PROFILE=ses-bedrock            # the credential_process profile from step 7b
+BEDROCK_GUARDRAIL_ID=<guardrail-id>
+BEDROCK_GUARDRAIL_VERSION=<numbered version, not DRAFT>
 ```
+
+There is **no AI key in this file**. AWS credentials are short-lived and come
+from the profile set up in step 7b. With `ENVIRONMENT=prod` the service refuses
+to start if a long-term AWS access key is present in its environment, or if
+`BEDROCK_GUARDRAIL_ID` is missing.
 
 ### 7a. Register SES in Entra ID (single sign-on)
 
@@ -181,6 +187,70 @@ ENVIRONMENT=prod
 With `ENVIRONMENT=prod` the service refuses to start if any of these are
 missing, if the redirect URI is not `https://`, or if `ENTRA_AUTHORITY` is
 anything but `https://login.microsoftonline.com`.
+
+### 7b. AWS credentials for Bedrock (no keys on the server)
+
+SR-2026-052 items 1.1 / 1.6. All AI runs in WPI's AWS account on Bedrock,
+through a dedicated least-privilege role, with short-lived credentials that
+never leave the server. Use a **separate development account** for development;
+never production credentials.
+
+1. **Model access** in `AWS_REGION`: Claude Opus 5.5 and Claude Sonnet 5.5 (the
+   Messages-API Bedrock endpoint), Amazon Titan Text Embeddings V2, and Amazon
+   Nova Sonic.
+2. **IAM role `ses-bedrock`**, allowing exactly what SES calls and nothing else.
+   Confirm the action names and model ARNs against the Bedrock console for your
+   region and model versions before applying:
+
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       { "Sid": "ClaudeScoring", "Effect": "Allow",
+         "Action": "bedrock-mantle:CreateInference",
+         "Resource": ["<ARN of anthropic.claude-opus-5-5>", "<ARN of anthropic.claude-sonnet-5-5>"] },
+       { "Sid": "TitanEmbeddings", "Effect": "Allow",
+         "Action": "bedrock:InvokeModel",
+         "Resource": "arn:aws:bedrock:<region>::foundation-model/amazon.titan-embed-text-v2:0" },
+       { "Sid": "NovaSonicVoice", "Effect": "Allow",
+         "Action": "bedrock:InvokeModelWithBidirectionalStream",
+         "Resource": "arn:aws:bedrock:<region>::foundation-model/amazon.nova-sonic-v1:0" },
+       { "Sid": "Guardrail", "Effect": "Allow",
+         "Action": "bedrock:ApplyGuardrail",
+         "Resource": "arn:aws:bedrock:<region>:<account-id>:guardrail/<guardrail-id>" }
+     ]
+   }
+   ```
+3. **Credential delivery.** The VM is on Nutanix, which has no EC2 instance
+   metadata, so use **IAM Roles Anywhere** (an X.509 certificate from a WPI CA
+   is exchanged for STS credentials), or vault-issued STS credentials. Either
+   way it plugs into the standard AWS chain as a `credential_process` profile.
+   For the service user's `~/.aws/config`:
+
+   ```ini
+   [profile ses-bedrock]
+   credential_process = /usr/local/bin/aws_signing_helper credential-process \
+       --certificate /etc/ses/bedrock.crt --private-key /etc/ses/bedrock.key \
+       --trust-anchor-arn <trust-anchor-arn> --profile-arn <profile-arn> --role-arn <ses-bedrock-role-arn>
+   region = us-east-1
+   ```
+
+   The certificate key is readable only by the service user. Rotate it on the
+   CA's schedule. botocore refreshes the STS credentials before they expire.
+4. **Guardrail.** Create a Bedrock Guardrail with content filters (hate,
+   insults, sexual, violence, misconduct, prompt attacks) and the sensitive
+   information types students should not disclose (e.g. phone, email, address,
+   government ids). Publish a **numbered version** and set
+   `BEDROCK_GUARDRAIL_ID` / `BEDROCK_GUARDRAIL_VERSION`. An intervention on
+   persona speech ends the interview and flags it; on a student turn it flags
+   it; on feedback it withholds and flags it (see RUNBOOK.md).
+5. **CloudTrail** must cover this account (organizational control).
+
+Check from the VM, as the service user:
+
+```bash
+sudo -u mohammedthameem AWS_PROFILE=ses-bedrock aws sts get-caller-identity
+```
 
 ### 8. Install backend deps into the uv-managed venv
 
@@ -238,10 +308,13 @@ You should see every migration apply in order, `0001_initial` through `0010_entr
 
 ```bash
 cd /opt/stakeholder-engagement-simulator/backend
-sudo -u mohammedthameem -E uv run python scripts/embed_and_load.py
+sudo -u mohammedthameem env AWS_PROFILE=ses-bedrock uv run python scripts/embed_and_load.py
 ```
 
-`-E` preserves the shell env so the script picks up `OPENAI_API_KEY` from the .env (alternatively `source /opt/stakeholder-engagement-simulator/.env && export OPENAI_API_KEY` first). The script TRUNCATES the vector tables before inserting, so it's safe to re-run.
+Embeddings come from Titan on Bedrock with the step-7b credentials. The script
+TRUNCATES the vector tables before inserting, so it's safe to re-run. **It must
+be re-run after migration `0011`**, which empties the chunk tables to change
+the vector dimension (1536 → 1024). Until then retrieval returns no context.
 
 Verify:
 
@@ -563,20 +636,28 @@ The old `interviewsimulator.service` already binds `127.0.0.1:8000`. This servic
 sudo ss -ltnp | grep 800
 ```
 
-### `OPENAI_API_KEY` not loaded → 502 from `/api/realtime/token`
+### Interview ends immediately: `stream_open_failed`
 
-Symptoms: browser shows `SDP exchange failed: 502 openai transport error: Illegal header value b'Bearer '`. Root cause: `.env` isn't being read.
+The audit log shows `ai.realtime_session` with `stage: stream_end`,
+`reason: stream_open_failed` and an `error_type`. The backend could not open
+the Nova Sonic stream. In order:
 
-Fix: confirm `/opt/stakeholder-engagement-simulator/.env` exists, has `OPENAI_API_KEY=sk-…`, and is readable by the `mohammedthameem` user. `app/config.py` searches both `backend/.env` and the repo-root `.env`; the systemd unit also sets `EnvironmentFile=`, so any of those is fine.
+- `ProfileNotFoundError` / `NoCredentialsError`: `AWS_PROFILE` is not set for
+  the service, or the profile is missing from the service user's
+  `~/.aws/config`. Check with `sudo -u mohammedthameem AWS_PROFILE=ses-bedrock
+  aws sts get-caller-identity`.
+- `AccessDeniedException`: the `ses-bedrock` role lacks
+  `bedrock:InvokeModelWithBidirectionalStream` on the Nova Sonic model, or
+  model access is not enabled in `AWS_REGION`.
+- Timeouts: outbound HTTPS to `bedrock-runtime.<region>.amazonaws.com` is
+  blocked.
 
-```bash
-sudo -u mohammedthameem cat /opt/stakeholder-engagement-simulator/.env | grep OPENAI_API_KEY
-sudo systemctl restart stakeholder-engagement-simulator
-```
+### Interview starts but no audio / disconnects at once
 
-### WebRTC needs outbound to `api.openai.com`
-
-If the score page loads but `Start interview` fails with an opaque `connection failed`, check whether the campus firewall blocks outbound HTTPS to `api.openai.com` (and the SDP-answer endpoint at `/v1/realtime/calls`). The audio stream itself is over UDP/STUN — those ports also need to be allowed outbound.
+Apache is not proxying the WebSocket. Enable `mod_proxy_wstunnel` and make sure
+the `ProxyPass /api/realtime/stream ws://…` line comes **before** the catch-all
+`ProxyPass /` (see `deploy/apache/`). A browser console error on
+`wss://…/api/realtime/stream` confirms it.
 
 ### `curl -I` on `/api/health` returns 405
 

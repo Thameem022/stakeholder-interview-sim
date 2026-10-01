@@ -14,27 +14,14 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 import numpy as np
-from openai import AsyncOpenAI
 
-from app.config import settings
+from app.ai.embeddings import embed_texts
 from app.db import get_pool
-
-_openai_client: Optional[AsyncOpenAI] = None
-
-
-def _client() -> AsyncOpenAI:
-    global _openai_client
-    if _openai_client is None:
-        _openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
-    return _openai_client
 
 
 async def embed(texts: List[str]) -> List[List[float]]:
-    if not texts:
-        return []
-    client = _client()
-    resp = await client.embeddings.create(model=settings.embedding_model, input=texts)
-    return [item.embedding for item in resp.data]
+    """Titan V2 embeddings on Bedrock (app/ai/embeddings.py)."""
+    return await embed_texts(texts)
 
 
 async def embed_one(text: str) -> List[float]:

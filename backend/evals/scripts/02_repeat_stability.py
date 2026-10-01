@@ -1,12 +1,13 @@
 """B1 — repeat-scoring stability. Collection only; analysis is a separate script.
 
-Scores every golden transcript N times with the same model at temperature 0 and
-writes one JSONL record per call. Temperature 0 is not determinism, and the
-spread this measures is the noise floor every later comparison sits on: an
-effect smaller than the SEM found here is not a finding.
+Scores every golden transcript N times with the same model at a fixed effort
+level (BEDROCK_SCORING_EFFORT — Claude takes no temperature) and writes one JSONL
+record per call. A fixed effort is not determinism, and the spread this measures
+is the noise floor every later comparison sits on: an effect smaller than the
+SEM found here is not a finding.
 
     uv run --group evals python -m evals.scripts.02_repeat_stability \
-        --n 15 --model gpt-4o --max-usd 20
+        --n 15 --model anthropic.claude-opus-5-5 --max-usd 20
 
 Re-running with the same arguments makes zero API calls — see evals/lib/cache.py.
 """
@@ -18,7 +19,7 @@ import asyncio
 import sys
 
 from app.api.eval import sanitize_transcript
-from app.config import get_settings
+from app.config import settings
 from app.evaluation.iqr_scorer import convert_transcript_to_iqr
 from evals.lib.cache import call_key, sha256_obj
 from evals.lib.golden import load_golden
@@ -35,7 +36,7 @@ from evals.lib.scoring import (
 )
 
 
-def build_specs(frame, n_repeats: int, model: str, temperature: float) -> tuple[list[CallSpec], dict]:
+def build_specs(frame, n_repeats: int, model: str, effort: str) -> tuple[list[CallSpec], dict]:
     """One spec per (transcript, run_idx, scorer).
 
     The cache key carries content hashes of the prompt, the SIC key and the
@@ -66,7 +67,7 @@ def build_specs(frame, n_repeats: int, model: str, temperature: float) -> tuple[
         for run_idx in range(n_repeats):
             common = dict(
                 model=model,
-                temperature=temperature,
+                effort=effort,
                 transcript_sha=transcript_sha,
                 persona_id=row.persona_id,
                 run_idx=run_idx,
@@ -98,22 +99,21 @@ def build_specs(frame, n_repeats: int, model: str, temperature: float) -> tuple[
 async def main() -> int:
     parser = argparse.ArgumentParser(description="B1 repeat-scoring stability (collection)")
     parser.add_argument("--n", type=int, default=15, help="repeat runs per transcript")
-    parser.add_argument("--model", default="gpt-4o")
-    parser.add_argument("--temperature", type=float, default=0.0)
+    parser.add_argument("--model", default=settings.bedrock_scoring_model)
     parser.add_argument("--concurrency", type=int, default=8)
     parser.add_argument("--max-usd", type=float, default=20.0)
     parser.add_argument("--limit", type=int, default=None, help="first N transcripts only (pilot runs)")
     parser.add_argument("--name", default="b1_stability")
     args = parser.parse_args()
 
-    get_settings()  # bridges OPENAI_API_KEY into os.environ for the scorers
+    effort = settings.bedrock_scoring_effort
 
     frame = load_golden()
     if args.limit:
         frame = frame.head(args.limit)
 
-    specs, payloads = build_specs(frame, args.n, args.model, args.temperature)
-    iqr_scorer, sic_scorer = make_scorers(args.model, args.temperature)
+    specs, payloads = build_specs(frame, args.n, args.model, effort)
+    iqr_scorer, sic_scorer = make_scorers(args.model)
 
     async def executor(spec: CallSpec) -> dict:
         payload = payloads[spec.key]
@@ -127,7 +127,7 @@ async def main() -> int:
             model=args.model,
             concurrency=args.concurrency,
             max_usd=args.max_usd,
-            temperature=args.temperature,
+            effort=effort,
         )
     )
     print(

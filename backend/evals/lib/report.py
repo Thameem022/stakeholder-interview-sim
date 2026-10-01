@@ -3,7 +3,7 @@
 Every study writes a dated Markdown file with the same header, so a number can
 always be traced back to the code, prompts and data that produced it. A figure
 without that header is not reportable — six months on, nobody can tell whether
-it came from prompt v2 or v3, or from gpt-4o or a silent fallback to mini.
+it came from prompt v2 or v3, or from the primary model or a silent fallback.
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ def header_block(title: str, manifest: dict, extra: Optional[dict] = None) -> st
         + (" (dirty)" if manifest.get("git_dirty") else ""),
         "run_id": manifest.get("run_id", "unknown"),
         "model": config.get("model", "unknown"),
-        "temperature": config.get("temperature"),
+        "effort": config.get("effort"),
         "harness": manifest.get("harness_version"),
         "api_calls": manifest.get("api_calls"),
         "spend_usd": manifest.get("spent_usd"),

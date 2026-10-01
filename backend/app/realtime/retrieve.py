@@ -36,7 +36,7 @@ router = APIRouter()
 
 # Driven by the model's own tool calls, so roughly 20-40 per interview. This
 # ceiling exists to stop a runaway tool-call loop, not to manage spend — each
-# call is one text-embedding-3-small request.
+# call is one Titan embedding request.
 _RETRIEVE_LIMIT = ("realtime-retrieve", 300, 3600)
 
 # Two writes per conversational turn, no external cost. Bounds table growth
@@ -151,6 +151,86 @@ def _format_context(persona_chunks, world_chunks) -> str:
     return "\n".join(lines)
 
 
+async def run_retrieval(user: CurrentUser, sid: UUID, persona_id: str, query: str) -> str:
+    """Embed, search, record telemetry and audit; return the context block.
+
+    Callers must already have established that `sid` is the caller's session
+    and `persona_id` its persona — the HTTP endpoint below, and the live voice
+    proxy (app/realtime/bedrock_proxy.py), which serves the model's tool calls.
+    """
+    k_persona, k_world = 5, 3
+    started = perf_counter()
+
+    try:
+        query_vec = await embed_one(query)
+    except Exception as e:
+        logger.warning("retrieve embed failed: %s", type(e).__name__)
+        elapsed = (perf_counter() - started) * 1000
+        _record_retrieval_event(
+            session_id=sid, persona_id=persona_id, query=query,
+            embed_ms=elapsed, search_ms=None, total_ms=elapsed,
+            persona_top_scores=[], world_top_scores=[],
+            persona_chunk_ids=[], world_chunk_ids=[],
+            k_persona=k_persona, k_world=k_world, error=f"embed: {type(e).__name__}",
+        )
+        audit(
+            "ai.retrieve", "failure", actor_user_id=user.id, participant_id=user.participant_id,
+            session_id=sid, persona_id=persona_id,
+            embedding_model=settings.bedrock_embedding_model_id, latency_ms=round(elapsed),
+            error_type=type(e).__name__,
+        )
+        return _format_context([], [])
+
+    embed_ms = (perf_counter() - started) * 1000
+
+    search_started = perf_counter()
+    results = await asyncio.gather(
+        search_persona(persona_id, query, k=k_persona, query_vec=query_vec),
+        search_world(query, k=k_world, query_vec=query_vec),
+        return_exceptions=True,
+    )
+    search_ms = (perf_counter() - search_started) * 1000
+
+    errors: list[str] = []
+    # Exception type only, in the log and in telemetry: the query is derived
+    # from what the student said, and an error message may echo it back.
+    persona_chunks: list[dict[str, Any]] = []
+    world_chunks: list[dict[str, Any]] = []
+    if isinstance(results[0], BaseException):
+        logger.warning("persona retrieval failed: %s", type(results[0]).__name__)
+        errors.append(f"persona: {type(results[0]).__name__}")
+    else:
+        persona_chunks = results[0]
+
+    if isinstance(results[1], BaseException):
+        logger.warning("world retrieval failed: %s", type(results[1]).__name__)
+        errors.append(f"world: {type(results[1]).__name__}")
+    else:
+        world_chunks = results[1]
+
+    _record_retrieval_event(
+        session_id=sid, persona_id=persona_id, query=query,
+        embed_ms=embed_ms, search_ms=search_ms,
+        total_ms=(perf_counter() - started) * 1000,
+        persona_top_scores=_scores(persona_chunks), world_top_scores=_scores(world_chunks),
+        persona_chunk_ids=_ids(persona_chunks), world_chunk_ids=_ids(world_chunks),
+        k_persona=k_persona, k_world=k_world,
+        error="; ".join(errors) or None,
+    )
+
+    # Metadata only — the query is what the student asked, so it stays out.
+    audit(
+        "ai.retrieve", "failure" if errors else "success", actor_user_id=user.id, participant_id=user.participant_id,
+        session_id=sid, persona_id=persona_id,
+        embedding_model=settings.bedrock_embedding_model_id,
+        latency_ms=round((perf_counter() - started) * 1000),
+        persona_hits=len(persona_chunks), world_hits=len(world_chunks),
+        error_type=[e.split(": ", 1)[-1] for e in errors] or None,
+    )
+
+    return _format_context(persona_chunks, world_chunks)
+
+
 @router.post(
     "/realtime/retrieve",
     response_model=RetrieveResponse,
@@ -176,78 +256,7 @@ async def retrieve_context(
     if session.persona_id != req.persona_id:
         raise HTTPException(status_code=400, detail="persona_id does not match session")
 
-    k_persona, k_world = 5, 3
-    started = perf_counter()
-
-    try:
-        query_vec = await embed_one(req.query)
-    except Exception as e:
-        logger.warning("retrieve embed failed: %s", type(e).__name__)
-        elapsed = (perf_counter() - started) * 1000
-        _record_retrieval_event(
-            session_id=sid, persona_id=req.persona_id, query=req.query,
-            embed_ms=elapsed, search_ms=None, total_ms=elapsed,
-            persona_top_scores=[], world_top_scores=[],
-            persona_chunk_ids=[], world_chunk_ids=[],
-            k_persona=k_persona, k_world=k_world, error=f"embed: {type(e).__name__}",
-        )
-        audit(
-            "ai.retrieve", "failure", actor_user_id=user.id, participant_id=user.participant_id,
-            session_id=sid, persona_id=req.persona_id,
-            embedding_model=settings.embedding_model, latency_ms=round(elapsed),
-            error_type=type(e).__name__,
-        )
-        return RetrieveResponse(text=_format_context([], []))
-
-    embed_ms = (perf_counter() - started) * 1000
-
-    search_started = perf_counter()
-    results = await asyncio.gather(
-        search_persona(req.persona_id, req.query, k=k_persona, query_vec=query_vec),
-        search_world(req.query, k=k_world, query_vec=query_vec),
-        return_exceptions=True,
-    )
-    search_ms = (perf_counter() - search_started) * 1000
-
-    errors: list[str] = []
-    # Exception type only, in the log and in telemetry: the query is derived
-    # from what the student said, and an error message may echo it back.
-    persona_chunks: list[dict[str, Any]] = []
-    world_chunks: list[dict[str, Any]] = []
-    if isinstance(results[0], BaseException):
-        logger.warning("persona retrieval failed: %s", type(results[0]).__name__)
-        errors.append(f"persona: {type(results[0]).__name__}")
-    else:
-        persona_chunks = results[0]
-
-    if isinstance(results[1], BaseException):
-        logger.warning("world retrieval failed: %s", type(results[1]).__name__)
-        errors.append(f"world: {type(results[1]).__name__}")
-    else:
-        world_chunks = results[1]
-
-    _record_retrieval_event(
-        session_id=sid, persona_id=req.persona_id, query=req.query,
-        embed_ms=embed_ms, search_ms=search_ms,
-        total_ms=(perf_counter() - started) * 1000,
-        persona_top_scores=_scores(persona_chunks), world_top_scores=_scores(world_chunks),
-        persona_chunk_ids=_ids(persona_chunks), world_chunk_ids=_ids(world_chunks),
-        k_persona=k_persona, k_world=k_world,
-        error="; ".join(errors) or None,
-    )
-
-    # Metadata only — the query is what the student asked, so it stays out.
-    audit(
-        "ai.retrieve", "failure" if errors else "success", actor_user_id=user.id, participant_id=user.participant_id,
-        session_id=sid, persona_id=req.persona_id,
-        embedding_model=settings.embedding_model,
-        latency_ms=round((perf_counter() - started) * 1000),
-        persona_hits=len(persona_chunks), world_hits=len(world_chunks),
-        error_type=[e.split(": ", 1)[-1] for e in errors] or None,
-    )
-
-    text = _format_context(persona_chunks, world_chunks)
-    return RetrieveResponse(text=text)
+    return RetrieveResponse(text=await run_retrieval(user, sid, req.persona_id, req.query))
 
 
 @router.post(

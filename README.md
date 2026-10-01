@@ -11,61 +11,74 @@ Repo name is `stakeholder-interview-sim`; the deployed product name is
 
 ## Personas
 
-| Persona id | Role | Realtime voice |
+| Persona id | Role | Nova Sonic voice |
 |---|---|---|
-| `alex_martinez` | Municipal planner | `sage` |
-| `michael_mike_alvarez` | Waterfront resident | `ash` |
-| `sarah_donnelly` | Small-business owner | `coral` |
-| `thomas_tom_caldwell` | Developer | `ballad` |
+| `alex_martinez` | Municipal planner | `tiffany` |
+| `michael_mike_alvarez` | Waterfront resident | `matthew` |
+| `sarah_donnelly` | Small-business owner | `amy` |
+| `thomas_tom_caldwell` | Developer | `matthew` |
+
+Voices are set in `backend/app/personas/voices.py`. Confirm them against the
+Nova Sonic voices available to the AWS account and region before go-live.
 
 ## Architecture
 
-- **Backend** — FastAPI on Python 3.11, managed with `uv`; asyncpg against
+- **Backend** — FastAPI on Python 3.12, managed with `uv`; asyncpg against
   PostgreSQL + pgvector. In production it also serves the built React SPA
   from `backend/static/`.
 - **Frontend** — React 18 + Vite + TypeScript + Tailwind, React Router.
-- **Realtime audio** — **browser-direct WebRTC** against the OpenAI Realtime
-  API. The backend is never in the audio path; it only mints the ephemeral
-  key, fulfills RAG tool calls, and persists transcripts.
-- **Vector store** — PostgreSQL + pgvector, embedded once with OpenAI
-  `text-embedding-3-small`. No torch or sentence-transformers in the runtime
-  image.
-- **Evaluation** — IQR + SIC scorers (LangChain + `gpt-4o`, `gpt-4o-mini`
-  fallback). Persona prompts and configs are preserved byte-for-byte from the
-  previous system.
-- **Auth** — hand-rolled cookie sessions (Argon2 passwords, SHA-256 session
-  token hashes). Every route except `/api/health` and `/api/auth/*` requires
-  a session.
+- **AI — Amazon Bedrock, direct, from the backend only** (SR-2026-052
+  SEC-AI-001). The browser talks to the SES origin and nothing else, and never
+  holds an AI credential.
+  - **Live voice persona** — Amazon **Nova Sonic** over a bidirectional stream.
+    The backend is in the audio path: browser ↔ SES (WebSocket) ↔ Bedrock.
+  - **Retrieval** — PostgreSQL + pgvector over **Titan Text Embeddings V2**
+    (1024 dimensions).
+  - **Scoring** — IQR + SIC on **Claude Opus 5.5** through the official
+    Anthropic SDK's Bedrock client, falling back to **Claude Sonnet 5.5** on a
+    refusal or transient error. Fixed `effort`, schema-validated JSON, and the
+    IQR overall score computed in code.
+  - **Guardrails** — Bedrock Guardrails on persona speech, student turns and
+    feedback.
+  - AWS credentials come only from the standard chain (role / STS / IAM Roles
+    Anywhere / vault), never from `.env` or source.
+- **Auth** — Microsoft Entra ID single sign-on (OIDC + PKCE), then an app
+  session cookie. Every route except `/api/health` and the sign-in endpoints
+  requires a session.
 
 ### Interview flow
 
-1. `POST /api/realtime/token` — the server assembles the Realtime session
-   config (persona instructions, voice, server-VAD turn detection, the
-   `retrieve_context` tool), inserts the `interview_sessions` row, then
-   exchanges the long-lived `OPENAI_API_KEY` for a short-lived ephemeral key.
-   **The browser never sees the real API key**, and never chooses its own
-   session id.
-2. The browser performs the SDP exchange directly with
-   `https://api.openai.com/v1/realtime/calls`. Audio then flows
-   browser ↔ OpenAI; the data channel carries transcripts and tool calls.
-3. When the model calls `retrieve_context`, the browser relays the query to
-   `POST /api/realtime/retrieve`, which embeds it and runs parallel pgvector
-   searches over persona chunks and Harbortown world-bible chunks.
-4. Each completed turn is posted to `POST /api/realtime/transcript` and
-   appended to the session's JSONB transcript.
-5. "End interview" calls `POST /api/eval/iqr`, which runs IQR and SIC in
-   parallel, persists the merged payload to `session_evaluations`, and
+1. `POST /api/realtime/token` — after the pre-session notice is acknowledged,
+   the server inserts the `interview_sessions` row and returns a **60-second,
+   single-use stream token** bound to that session and participant. No
+   provider credential is ever issued to the browser, and the browser never
+   chooses its own session id.
+2. The browser opens `WebSocket /api/realtime/stream` on the same origin
+   (session cookie + Origin check) and presents the token. The backend opens a
+   Nova Sonic stream with the persona's system prompt, voice and the
+   `retrieve_context` tool.
+3. The microphone is captured by an AudioWorklet as 16 kHz 16-bit PCM and sent
+   as binary frames. The backend relays them to Nova Sonic, and sends the
+   persona's 24 kHz audio back the same way. Audio is relayed in memory and
+   never stored.
+4. When the model calls `retrieve_context`, the backend embeds the query with
+   Titan and runs parallel pgvector searches over persona and world-bible
+   chunks. The same code serves `POST /api/realtime/retrieve`.
+5. The backend writes each final turn to the session's JSONB transcript, and
+   runs the guardrail on it. Nova Sonic streams have a bounded lifetime, so
+   the proxy renews the stream at a turn boundary and replays the
+   conversation so far into the new one.
+6. "End interview" closes the stream, and the server marks the session ended.
+   `POST /api/eval/iqr` then runs IQR and SIC in parallel on Claude, checks the
+   feedback with the guardrail, persists it to `session_evaluations` and
    returns it for the score report.
 
 ### No barge-in (deliberate)
 
-The persona cannot be interrupted. The server session sets
-`interrupt_response: false` with a 0.95 VAD threshold; the client
-additionally sets `track.enabled = false` **and** `sender.replaceTrack(null)`
-for the duration of every assistant response, so nothing — not even silence
-packets — reaches OpenAI's server VAD mid-response. Server VAD is still on
-for user turns, so replies auto-commit with no push-to-talk button. Output
-speed is `0.9` to give students more processing time.
+The persona cannot be interrupted. The browser stops sending microphone
+frames from the moment a persona reply starts until its audio has finished
+playing (plus a 300 ms tail), so playback bleed, background noise or an early
+start never reaches the model mid-reply. Replies need no push-to-talk button.
 
 ## Local development
 
@@ -80,9 +93,12 @@ cd frontend && npm install && cd ..
 docker compose up -d db
 
 # 4. Environment
-cp .env.example .env          # fill in OPENAI_API_KEY
+cp .env.example .env
+# AI calls need AWS credentials for a DEV account with Bedrock model access:
+# sign in with your own profile (e.g. `aws sso login --profile ses-dev`) and
+# set AWS_PROFILE. Never put AWS keys in .env.
 
-# 5. Migrations and vector-store seed (~5-10 min, one-shot)
+# 5. Migrations and vector-store seed (Titan embeddings; ~5-10 min, one-shot)
 cd backend
 set -a; . ../.env; set +a
 uv run alembic upgrade head
@@ -122,24 +138,28 @@ production refuses to start with any authority but Microsoft's.
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `OPENAI_API_KEY` | Yes | Realtime API + embeddings + IQR/SIC scoring |
 | `DATABASE_URL` | Yes | `postgresql+asyncpg://user:pass@host:5432/db` |
 | `ENVIRONMENT` | No | `dev` (default) or `prod`. `prod` makes cookies `Secure` and refuses to boot without a complete Entra configuration |
 | `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, `ENTRA_REDIRECT_URI` | Yes | The Entra app registration (placeholders in `.env.example`) |
 | `ENTRA_CLIENT_SECRET` | Yes | Injected from the vault / service environment, never committed |
 | `ENTRA_AUTHORITY` | No | `https://login.microsoftonline.com` (the only value production accepts) |
 | `ENTRA_REQUIRE_APP_ROLE` | No | Refuse tokens without a recognised app role (default `true`) |
-| `OPENAI_REALTIME_MODEL` | No | Defaults to `gpt-realtime` |
-| `EMBEDDING_MODEL` | No | Defaults to `text-embedding-3-small` |
+| `AWS_REGION` | No | Bedrock region (default `us-east-1`). Credentials come from the AWS chain, never this file |
+| `BEDROCK_SCORING_MODEL` / `BEDROCK_SCORING_FALLBACK_MODEL` | No | `anthropic.claude-opus-5-5` / `anthropic.claude-sonnet-5-5` |
+| `BEDROCK_SCORING_EFFORT` | No | Claude effort for scoring (default `high`); recorded with every evaluation |
+| `BEDROCK_ENRICHMENT_MODEL` | No | Model for the cosmetic coverage text (default `anthropic.claude-sonnet-5-5`) |
+| `BEDROCK_EMBEDDING_MODEL_ID` / `BEDROCK_EMBEDDING_DIMENSIONS` | No | `amazon.titan-embed-text-v2:0` / `1024`. The dimension must match the pgvector columns |
+| `BEDROCK_SPEECH_MODEL_ID` | No | Nova Sonic model id (default `amazon.nova-sonic-v1:0`) |
+| `NOVA_SONIC_STREAM_RENEW_SECONDS`, `REALTIME_MAX_SESSION_MINUTES` | No | Stream renewal age (420 s) and interview time limit (30 min) |
+| `BEDROCK_GUARDRAIL_ID` / `BEDROCK_GUARDRAIL_VERSION` | Prod | Required in production |
 | `PORT` | No | Defaults to `8000` |
 | `AUTH_EMAIL_DOMAIN` | No | Institutional domain a signed-in address must have (`wpi.edu`) |
 | `AUTH_COOKIE_NAME` | No | Defaults to `sis_session` |
 | `AUTH_SESSION_DEFAULT_HOURS`, `AUTH_SESSION_TOUCH_INTERVAL_SECONDS` | No | App session tuning; see [.env.example](.env.example) |
 | `LEGACY_SESSION_OWNER_EMAIL` | Once | Read **only** by migration `0005` to assign pre-auth sessions an owner |
 
-See [.env.example](.env.example) for the annotated set. Note that
-`docker-compose.yml` passes an explicit `OPENAI_REALTIME_MODEL` default that
-overrides the application default.
+See [.env.example](.env.example) for the annotated set. `docker-compose.yml`
+mounts `~/.aws` read-only and passes `AWS_PROFILE` / `AWS_REGION`.
 
 ## API surface
 
@@ -150,6 +170,8 @@ Public: `GET /api/health`, and the sign-in endpoints `GET /api/auth/login`
 Authenticated (declared once in `main.py`, not per route):
 `GET /api/personas`, `GET /api/voices`, `POST /api/realtime/token`,
 `POST /api/realtime/retrieve`, `POST /api/realtime/transcript`,
+`WebSocket /api/realtime/stream` (authenticates itself: cookie, Origin,
+single-use stream token),
 `POST /api/eval/iqr`, `POST /api/eval/sic`,
 `GET /api/eval/sessions/{session_id}/latest`.
 
@@ -180,7 +202,7 @@ Two conventions worth knowing:
 
 ## Database
 
-Ten Alembic migrations:
+Eleven Alembic migrations:
 
 | Revision | Adds |
 |---|---|
@@ -194,6 +216,7 @@ Ten Alembic migrations:
 | `0008_research_and_incidents` | restricted `research` schema (consent, consented copies, export approvals + log); `identity.account_roles`; `session_flags`; `interview_sessions.purged_at` |
 | `0009_retention` | `deletion_log`; research consent no longer cascades from course participants |
 | `0010_entra_sso` | Entra ID sign-in: `identity.users.entra_subject`, `identity.oidc_logins`; drops `password_hash` and `pending_registrations` |
+| `0011_bedrock` | Titan embedding dimension (1024; chunk tables emptied for re-embedding); `realtime_stream_tokens` |
 
 ### Pseudonymous data model
 
@@ -256,12 +279,13 @@ Frontend: `npm run typecheck` and `npm run lint`. Vitest is configured
 ## Production deployment
 
 - **WPI VM** (Apache → uvicorn on `127.0.0.1:8001`, local Postgres, systemd):
-  see [deploy/WPI_DEPLOY.md](deploy/WPI_DEPLOY.md). Apache needs only
-  `mod_proxy_http` — there is no WebSocket tunnel, because the audio path is
-  WebRTC. Outbound HTTPS to `api.openai.com` must be permitted.
-- **Single Railway service** (root `Dockerfile`, Railway Postgres): set
-  `OPENAI_API_KEY`, `DATABASE_URL`, `ENVIRONMENT`, and the auth variables,
-  then deploy from this repo's `Dockerfile`.
+  see [deploy/WPI_DEPLOY.md](deploy/WPI_DEPLOY.md). Apache needs
+  `mod_proxy_http` and `mod_proxy_wstunnel` (the interview WebSocket). Outbound
+  HTTPS to Entra ID and the AWS Bedrock endpoints must be permitted. AWS
+  credentials come from IAM Roles Anywhere or the vault.
+- **Container image** (root `Dockerfile`): supply `DATABASE_URL`,
+  `ENVIRONMENT`, the Entra variables and AWS credentials from the platform's
+  role or secret store, then deploy the image.
 
 The frontend build output (`frontend/dist`) is copied to `backend/static/`,
 which FastAPI serves with an SPA fallback.
@@ -291,21 +315,22 @@ stakeholder-interview-sim/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py, config.py, db.py, vector_store.py
-│   │   ├── realtime/        (token mint, RAG fulfillment, session state)
-│   │   ├── auth/            (passwords, sessions, rate limits, dependencies)
+│   │   ├── ai/              (Bedrock: Claude client, Titan, Guardrails, AWS credentials)
+│   │   ├── realtime/        (stream token, Nova Sonic proxy, RAG, session state)
+│   │   ├── auth/            (Entra OIDC, sessions, CSRF, rate limits, dependencies)
 │   │   ├── rag/             (persona dossier/facts chunking)
 │   │   ├── personas/        (prompts, configs, dossiers, voices, assembly)
 │   │   ├── evaluation/      (iqr_scorer, sic_scorer, prompts, sic_keys)
 │   │   └── api/             (health, auth, personas, eval routers)
-│   ├── alembic/versions/    (0001 … 0005)
+│   ├── alembic/versions/    (0001 … 0011)
 │   ├── scripts/             (embed_and_load.py, build_world_chunks.py, …)
-│   └── tests/               (auth + authz)
+│   └── tests/               (pytest; Bedrock and Entra are faked in-process)
 ├── frontend/
-│   ├── public/              (avatars/*.glb, background/, headaudio/dist/)
+│   ├── public/              (avatars/*.glb, background/, headaudio/dist/, audio/ capture worklet)
 │   └── src/
 │       ├── App.tsx, api.ts, personas.ts, ScorePage.tsx, ScoreReport.tsx
-│       ├── auth/            (AuthContext, Login, Register, RequireAuth)
-│       ├── realtime/webrtc.ts
+│       ├── auth/            (AuthContext, sign-in landing, RequireAuth, sso)
+│       ├── realtime/streamSession.ts
 │       ├── hooks/useRealtimeSession.ts
 │       └── components/      (Avatar, Header, Controls, …)
 ├── deploy/

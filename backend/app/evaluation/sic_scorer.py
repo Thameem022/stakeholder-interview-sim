@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Dict, List, Literal, Optional, Tuple
 
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field
 
+from app.ai.claude import ClaudeOnBedrock, StructuredLLM
+from app.config import settings
+from app.evaluation.generation import generate_with_fallback
 from app.evaluation.untrusted import UNTRUSTED_TRANSCRIPT_NOTICE, neutralize_turn_text
 
 logger = logging.getLogger(__name__)
@@ -230,13 +230,6 @@ def _quote_is_the_students(quote: str, student_blob: str) -> bool:
 # ── SICScorer ────────────────────────────────────────────────────────────────
 
 
-def _build_llm(model: str = "gpt-4o", temperature: float = 0.0) -> ChatOpenAI:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY environment variable is required for SIC scoring.")
-    return ChatOpenAI(model=model, temperature=temperature, api_key=SecretStr(api_key))
-
-
 class SICScorer:
     """
     Grades an interview transcript against a persona's SIC key and returns
@@ -255,22 +248,23 @@ class SICScorer:
     def __init__(
         self,
         prompt_path: Optional[str] = None,
-        model: str = "gpt-4o",
-        fallback_model: str = "gpt-4o-mini",
+        model: Optional[str] = None,
+        fallback_model: Optional[str] = None,
         allow_fallback: bool = True,
-        temperature: float = 0.0,
+        llm: Optional[StructuredLLM] = None,
     ) -> None:
         self._prompt_path = Path(prompt_path) if prompt_path else DEFAULT_SIC_PROMPT_PATH
         if not self._prompt_path.is_file():
             raise FileNotFoundError(f"SIC system prompt not found at: {self._prompt_path}")
         self._system_prompt = self._prompt_path.read_text(encoding="utf-8")
-        self._model = model
-        self._fallback_model = fallback_model
+        self._model = model or settings.bedrock_scoring_model
+        self._fallback_model = fallback_model or settings.bedrock_scoring_fallback_model
         # Evaluation runs set this False: a silent downgrade to the fallback model
         # would otherwise be recorded as a measurement of the primary one.
         self._allow_fallback = allow_fallback
-        self._temperature = temperature
-        self._llm = _build_llm(model, temperature)
+        self._llm: StructuredLLM = llm or ClaudeOnBedrock(
+            refusal_fallback=self._fallback_model if allow_fallback else None
+        )
         # Set by grade_raw()/evaluate(); None until the first call.
         self.last_model_used: Optional[str] = None
         self.last_error: Optional[str] = None
@@ -401,32 +395,37 @@ class SICScorer:
                 lines.append(f"[{speaker}]: {text}")
         return "\n".join(lines)
 
-    def _build_chain(self, llm):
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", "{system_prompt}\n\n{injection_notice}"),
-            (
-                "user",
-                "Grade the following interview transcript against the SIC catalog.\n\n"
-                "TRANSCRIPT:\n```\n{transcript}\n```\n\n"
-                "{rubric}\n\n"
-                "Return a JSON object with a 'grades' array. Each entry must have:\n"
-                "  - chunk_id   (string — must match exactly)\n"
-                "  - elicited   (boolean)\n"
-                "  - earned_mode (string — required for every item):\n"
-                "      'earned'      — student's question or framing directly preceded the persona's mention\n"
-                "                      (elicited=true requires earned_mode='earned' by definition)\n"
-                "      'volunteered' — the content appears in the transcript but the persona raised it\n"
-                "                      unprompted or in response to a broad opener that did not target\n"
-                "                      this item; elicited must be false in this case\n"
-                "      'not_present' — the content does not appear in the transcript at all\n"
-                "  - credit_mode (string or null — see schema)\n"
-                "  - omission_classification (string or null — Tier 3 only when elicited=false)\n"
-                "  - evidence_quote (string — verbatim from student turns only; empty if no relevant student behavior)\n"
-                "  - surfacing_cues_used (array of strings — verbatim entries from the item's surfacing_cues list that the student demonstrated)\n\n"
-                "You MUST include one entry for every chunk_id listed above. No omissions.",
-            ),
-        ])
-        return prompt | llm.with_structured_output(SICGradingResult)
+    def build_messages(self, sic_key: dict, turns: List[dict]) -> tuple[str, str]:
+        """(system, user) exactly as the grader receives them."""
+        rubric_text = self._build_rubric_text(
+            sic_key.get("sic_catalog", []),
+            sic_key.get("omission_policy"),
+            persona_name=sic_key.get("persona_name"),
+            persona_archetype=sic_key.get("archetype"),
+            grading_rules=sic_key.get("grading_rules"),
+        )
+        system = f"{self._system_prompt}\n\n{UNTRUSTED_TRANSCRIPT_NOTICE}"
+        user = (
+            "Grade the following interview transcript against the SIC catalog.\n\n"
+            f"TRANSCRIPT:\n```\n{self._format_transcript(turns)}\n```\n\n"
+            f"{rubric_text}\n\n"
+            "Return a JSON object with a 'grades' array. Each entry must have:\n"
+            "  - chunk_id   (string — must match exactly)\n"
+            "  - elicited   (boolean)\n"
+            "  - earned_mode (string — required for every item):\n"
+            "      'earned'      — student's question or framing directly preceded the persona's mention\n"
+            "                      (elicited=true requires earned_mode='earned' by definition)\n"
+            "      'volunteered' — the content appears in the transcript but the persona raised it\n"
+            "                      unprompted or in response to a broad opener that did not target\n"
+            "                      this item; elicited must be false in this case\n"
+            "      'not_present' — the content does not appear in the transcript at all\n"
+            "  - credit_mode (string or null — see schema)\n"
+            "  - omission_classification (string or null — Tier 3 only when elicited=false)\n"
+            "  - evidence_quote (string — verbatim from student turns only; empty if no relevant student behavior)\n"
+            "  - surfacing_cues_used (array of strings — verbatim entries from the item's surfacing_cues list that the student demonstrated)\n\n"
+            "You MUST include one entry for every chunk_id listed above. No omissions."
+        )
+        return system, user
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -445,33 +444,14 @@ class SICScorer:
         if not catalog:
             return SICGradingResult(grades=[])
 
-        rubric_text = self._build_rubric_text(
-            catalog,
-            sic_key.get("omission_policy"),
-            persona_name=sic_key.get("persona_name"),
-            persona_archetype=sic_key.get("archetype"),
-            grading_rules=sic_key.get("grading_rules"),
+        system, user = self.build_messages(sic_key, turns)
+        outcome, self.last_error = await generate_with_fallback(
+            self._llm, model=self._model, fallback_model=self._fallback_model,
+            allow_fallback=self._allow_fallback, system=system, user=user,
+            schema=SICGradingResult, usage=(config or {}).get("usage"),
         )
-        chain_input = {
-            "system_prompt": self._system_prompt,
-            "injection_notice": UNTRUSTED_TRANSCRIPT_NOTICE,
-            "transcript": self._format_transcript(turns),
-            "rubric": rubric_text,
-        }
-
-        self.last_model_used = self._model
-        try:
-            return await self._build_chain(self._llm).ainvoke(chain_input, config=config)
-        except Exception as e:
-            # Record what went wrong before deciding whether to retry — an
-            # unrecorded downgrade makes the run unattributable afterwards.
-            self.last_error = f"{type(e).__name__}: {e}"
-            if not self._allow_fallback:
-                raise
-            fallback_chain = self._build_chain(_build_llm(self._fallback_model, self._temperature))
-            result = await fallback_chain.ainvoke(chain_input, config=config)
-            self.last_model_used = self._fallback_model
-            return result
+        self.last_model_used = outcome.model
+        return outcome.value
 
     async def grade_raw(
         self, persona_id: str, turns: List[dict], config: Optional[dict] = None

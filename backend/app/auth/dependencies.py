@@ -54,16 +54,24 @@ async def require_user(request: Request) -> CurrentUser:
         raise auth_error(
             status.HTTP_401_UNAUTHORIZED, "not_authenticated", "Not signed in."
         )
+    user = await user_for_session_token(token)
+    if user is None:
+        # A cookie that names no live session: expired, revoked, or forged.
+        audit("auth.session_rejected", "denied", request=request)
+        raise auth_error(
+            status.HTTP_401_UNAUTHORIZED, "not_authenticated", "Not signed in."
+        )
+    return user
 
+
+async def user_for_session_token(token: str) -> CurrentUser | None:
+    """The signed-in user for a session cookie value, or None. Shared by
+    require_user and the WebSocket endpoint, which has no Request to inject."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await load_session_user(conn, token)
         if row is None:
-            # A cookie that names no live session: expired, revoked, or forged.
-            audit("auth.session_rejected", "denied", request=request)
-            raise auth_error(
-                status.HTTP_401_UNAUTHORIZED, "not_authenticated", "Not signed in."
-            )
+            return None
         await touch_session(
             conn,
             row["session_id"],

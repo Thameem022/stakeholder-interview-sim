@@ -79,10 +79,13 @@ export const healthCheck = async () => {
   return data
 }
 
+/** Starts an interview. Never an AI-provider credential — only a short-lived,
+ * single-use token for the backend's own stream. */
 export interface RealtimeToken {
-  ephemeral_key: string
   session_id: string
-  model: string
+  stream_token: string
+  expires_in: number
+  voice_id: string
 }
 
 export interface PreSessionNotice {
@@ -133,34 +136,6 @@ export const getRealtimeToken = async (
     voice_id: voiceId,
     notice_version: noticeVersion,
   })
-  return data
-}
-
-export const postRetrieve = async (
-  personaId: string,
-  query: string,
-  sessionId: string
-): Promise<{ text: string }> => {
-  const { data } = await apiClient.post(
-    '/api/realtime/retrieve',
-    { persona_id: personaId, query, session_id: sessionId },
-    // Background call during a live interview — see skipAuthRedirect.
-    { skipAuthRedirect: true }
-  )
-  return data
-}
-
-export const postTranscript = async (
-  sessionId: string,
-  role: 'user' | 'assistant',
-  text: string,
-  ended?: boolean
-): Promise<{ ok: boolean; turns: number }> => {
-  const { data } = await apiClient.post(
-    '/api/realtime/transcript',
-    { session_id: sessionId, role, text, ended },
-    { skipAuthRedirect: true }
-  )
   return data
 }
 

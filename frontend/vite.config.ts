@@ -8,6 +8,8 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
+        // The live interview is a WebSocket under /api (/api/realtime/stream).
+        ws: true,
       },
     },
   },

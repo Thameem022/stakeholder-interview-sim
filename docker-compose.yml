@@ -23,14 +23,16 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/sis
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_REALTIME_MODEL=${OPENAI_REALTIME_MODEL:-gpt-4o-realtime-preview}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      # AWS credentials come from your own short-lived profile (e.g. an SSO
+      # profile in a DEV account), mounted read-only — never a key in here.
+      - AWS_PROFILE=${AWS_PROFILE:-}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - ./backend:/app
+      - ${HOME}/.aws:/root/.aws:ro
     command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:

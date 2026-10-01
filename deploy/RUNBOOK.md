@@ -22,7 +22,7 @@ roles only.
 ## How incidents reach you
 
 - **A session flag.** Students can flag their own session, instructors can flag
-  any session, and automated AI guardrails (when wired) flag on a trip. Every
+  any session, and Bedrock Guardrails flag automatically (persona speech that trips the guardrail also ends the interview; harmful feedback is withheld). Every
   flag emits the audit event `incident.session_flagged` with `severity: high`.
   The SIEM alert rule on that event pages the Support Owner. The event names
   the session, reason and source but never the note or any transcript text.

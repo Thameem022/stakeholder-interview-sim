@@ -130,6 +130,9 @@ async def _enforce(conn: asyncpg.Connection, policy: RetentionPolicy, now: datet
     counts["sign_in_attempts_expired"] = _n(await conn.execute(
         "DELETE FROM identity.oidc_logins WHERE expires_at < $1", now
     ))
+    counts["stream_tokens_spent"] = _n(await conn.execute(
+        "DELETE FROM realtime_stream_tokens WHERE expires_at < $1", now
+    ))
     counts["rate_limit_rows"] = _n(await conn.execute(
         "DELETE FROM identity.auth_rate_limits WHERE occurred_at < $1", now - _RATE_LIMIT_KEEP
     ))

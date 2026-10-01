@@ -120,8 +120,8 @@ def logged_in_client(client, email):
 def owned_session():
     """Insert an interview_sessions row directly for a given owner.
 
-    Sidesteps /api/realtime/token so eval and transcript tests never need a
-    network call to OpenAI.
+    Sidesteps /api/realtime/token, so eval and transcript tests need no
+    live interview stream.
     """
 
     def _make(user_id: str, transcript: str = "[]") -> uuid.UUID:
