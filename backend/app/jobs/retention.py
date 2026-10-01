@@ -7,8 +7,8 @@ Run daily by the systemd timer in deploy/systemd/:
 
 What it enforces (configured in .env, see app/config.py):
 
-  every run      expired sign-in sessions, stale registrations and rate-limit
-                 rows; RAG query telemetry older than RETENTION_TELEMETRY_DAYS;
+  every run      expired sign-in sessions, abandoned SSO sign-in attempts and
+                 old rate-limit rows; RAG query telemetry older than RETENTION_TELEMETRY_DAYS;
                  research copies no longer covered by a consent (belt and
                  braces — withdrawal already deletes them); expired, unused
                  export approvals.
@@ -46,7 +46,6 @@ from app.config import settings
 from app.observability.audit import audit, configure_audit_logging
 
 # Rows that exist only to make sign-in work; kept just long enough to be useful.
-_STALE_REGISTRATION_DAYS = 30
 _RATE_LIMIT_KEEP = timedelta(days=1)
 _UNUSED_APPROVAL_DAYS = 30
 
@@ -128,12 +127,8 @@ async def _enforce(conn: asyncpg.Connection, policy: RetentionPolicy, now: datet
     counts["auth_sessions_expired"] = _n(await conn.execute(
         "DELETE FROM identity.auth_sessions WHERE expires_at < $1", now
     ))
-    counts["registrations_stale"] = _n(await conn.execute(
-        """
-        DELETE FROM identity.pending_registrations
-        WHERE (consumed_at IS NOT NULL OR expires_at < $1) AND created_at < $2
-        """,
-        now, now - timedelta(days=_STALE_REGISTRATION_DAYS),
+    counts["sign_in_attempts_expired"] = _n(await conn.execute(
+        "DELETE FROM identity.oidc_logins WHERE expires_at < $1", now
     ))
     counts["rate_limit_rows"] = _n(await conn.execute(
         "DELETE FROM identity.auth_rate_limits WHERE occurred_at < $1", now - _RATE_LIMIT_KEEP
@@ -218,9 +213,6 @@ async def _enforce(conn: asyncpg.Connection, policy: RetentionPolicy, now: datet
               AND NOT EXISTS (SELECT 1 FROM interview_sessions s WHERE s.participant_id = p.participant_id)
             """,
             cutoff,
-        ))
-        counts["registrations_from_term"] = _n(await conn.execute(
-            "DELETE FROM identity.pending_registrations WHERE created_at < $1", cutoff
         ))
 
     # --- protocol end: research data --------------------------------------------------

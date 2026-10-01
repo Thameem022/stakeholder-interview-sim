@@ -89,11 +89,11 @@ def test_sign_in_identity_and_the_mapping_live_in_the_identity_schema():
     tables = {r[0] for r in _rows(
         "SELECT table_name FROM information_schema.tables WHERE table_schema = 'identity'"
     )}
-    assert {"users", "auth_sessions", "pending_registrations", "auth_rate_limits"} <= tables
+    assert {"users", "auth_sessions", "oidc_logins", "auth_rate_limits"} <= tables
     public = {r[0] for r in _rows(
         "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
     )}
-    assert not public & {"users", "auth_sessions", "pending_registrations", "auth_rate_limits"}
+    assert not public & {"users", "auth_sessions", "oidc_logins", "auth_rate_limits"}
     # The mapping: one account, one pseudonym, both ways.
     assert scalar(
         "SELECT count(*) FROM pg_indexes WHERE schemaname = 'identity' "
@@ -121,7 +121,7 @@ def roles():
 
 
 def test_course_reader_cannot_read_the_identity_store(roles):
-    for table in ("users", "auth_sessions", "pending_registrations", "auth_rate_limits"):
+    for table in ("users", "auth_sessions", "oidc_logins", "auth_rate_limits"):
         with pytest.raises(psycopg2.errors.InsufficientPrivilege):
             _as_role("ses_course_reader", f"SELECT 1 FROM identity.{table} LIMIT 1")
 

@@ -44,7 +44,7 @@ Outcome = Literal["success", "failure", "denied"]
 FORBIDDEN_FIELDS = frozenset({
     "text", "transcript", "turns", "query", "quote", "evidence_quote",
     "student_quote", "prompt", "content", "message", "messages", "password",
-    "temp_password", "token", "email", "first_name", "last_name", "name",
+    "token", "id_token", "code", "email", "first_name", "last_name", "name",
 })
 _MAX_STR = 200
 

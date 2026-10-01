@@ -53,8 +53,8 @@ async def make_student(conn, *, created: datetime, role: str | None = None) -> d
     )
     uid = await conn.fetchval(
         """
-        INSERT INTO identity.users (email, first_name, last_name, password_hash, participant_id, created_at)
-        VALUES ($1, 'Test', 'Student', 'x', $2, $3) RETURNING id
+        INSERT INTO identity.users (email, first_name, last_name, participant_id, entra_subject, created_at)
+        VALUES ($1, 'Test', 'Student', $2, gen_random_uuid()::text, $3) RETURNING id
         """,
         f"sis-test-ret-{uuid.uuid4().hex[:10]}@wpi.edu", pid, created,
     )

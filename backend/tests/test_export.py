@@ -9,7 +9,7 @@ import zipfile
 
 import pytest
 
-from tests.conftest import register, set_password, sign_in_as
+from tests.conftest import enroll, sign_in_as
 from tests.db import participant_of, scalar, sql
 from tests.test_audit import audit_log  # noqa: F401  (fixture)
 
@@ -56,11 +56,7 @@ def _session_with_feedback(owned_session, user_id) -> uuid.UUID:
 
 
 def _other_user(client) -> tuple[str, str]:
-    email = f"sis-test-{uuid.uuid4().hex[:12]}@wpi.edu"
-    register(client, email)
-    r = set_password(client, email)
-    assert r.status_code == 200, r.text
-    return email, r.json()["id"]
+    return enroll(client)
 
 
 def test_a_student_downloads_their_own_interview(logged_in_client, owned_session, audit_log):  # noqa: F811

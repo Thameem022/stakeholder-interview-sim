@@ -25,8 +25,8 @@ def generate_session_token() -> str:
 
 def hash_session_token(token: str) -> str:
     # Plain SHA-256 is right here: the input is 256 bits of entropy, so there
-    # is no dictionary to slow an attacker down with. Argon2 would only add
-    # latency to every authenticated request.
+    # is no dictionary to slow an attacker down with. A deliberately slow hash
+    # would only add latency to every authenticated request.
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 

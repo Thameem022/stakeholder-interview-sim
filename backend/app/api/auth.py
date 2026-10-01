@@ -1,28 +1,28 @@
-"""Account creation and login.
+"""Sign-in through Microsoft Entra ID, and the app session that follows.
 
-Registration is deliberately two-phase: `register` only writes a
-pending_registrations row, and an actual users row appears when the temporary
-password is exchanged for a real one in `set-password`. An address that never
-completes step two never becomes an account.
+SR-2026-052 item 1.3 (SEC-IAM-001). There are no local accounts and no
+passwords: GET /auth/login sends the browser to Entra, Entra sends it back to
+GET /auth/callback with a code, and a verified ID token is resolved to the
+person's pseudonymous participant before an app session cookie is issued.
+
+Each sign-in is bound to the browser that started it: /login sets a
+short-lived cookie whose hash is stored with the state, nonce and PKCE
+verifier, and /callback refuses a state that arrives without it. A callback
+URL forwarded to someone else's browser therefore signs nobody in.
 """
 
 from __future__ import annotations
 
 import logging
-import re
 from datetime import datetime, timedelta, timezone
+from typing import Optional
+from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Request, Response, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Request, Response, status
+from fastapi.responses import RedirectResponse
 
+from app.auth import oidc
 from app.auth.errors import auth_error as _fail
-from app.auth.passwords import (
-    hash_password,
-    issue_temp_password,
-    normalize_temp_password,
-    password_policy_failures,
-    verify_password,
-)
 from app.auth.ratelimit import client_ip, enforce
 from app.auth.sessions import (
     clear_session_cookie,
@@ -40,67 +40,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-
-# Windows are in seconds. Every action is limited on both the address and the
-# caller IP: the address limit stops one account being hammered, the IP limit
-# stops one caller sweeping many addresses.
-_REGISTER_EMAIL = (5, 3600)
-_REGISTER_IP = (15, 3600)
-_LOGIN_EMAIL = (10, 900)
 _LOGIN_IP = (30, 900)
-_SET_PASSWORD_EMAIL = (10, 3600)
-_SET_PASSWORD_IP = (20, 3600)
-
-
-class RegisterRequest(BaseModel):
-    first_name: str = Field(max_length=100)
-    last_name: str = Field(max_length=100)
-    email: str = Field(max_length=254)
-
-
-class SetPasswordRequest(BaseModel):
-    email: str = Field(max_length=254)
-    temp_password: str = Field(max_length=100)
-    new_password: str = Field(max_length=200)
-
-
-class LoginRequest(BaseModel):
-    email: str = Field(max_length=254)
-    password: str = Field(max_length=200)
-    remember: bool = False
-
-
-class UserResponse(BaseModel):
-    id: str
-    email: str
-    first_name: str
-    last_name: str
-
-
-def _clean_email(raw: str) -> str:
-    """Normalise and validate an address, enforcing the institutional domain.
-
-    The mockup checks the domain in the browser too, but that is presentation:
-    this is the check that decides who may register.
-    """
-    email = raw.strip().lower()
-    if not _EMAIL_RE.match(email):
-        raise _fail(
-            status.HTTP_400_BAD_REQUEST, "invalid_email", "Enter a valid email address."
-        )
-    if not email.endswith("@" + settings.auth_email_domain.lower()):
-        raise _fail(
-            status.HTTP_400_BAD_REQUEST,
-            "invalid_domain",
-            f"Registration is limited to @{settings.auth_email_domain} addresses.",
-        )
-    return email
-
-
-def _failure_reason(exc: HTTPException) -> str:
-    detail: dict = exc.detail if isinstance(exc.detail, dict) else {}
-    return str(detail.get("code") or exc.status_code)
+_CALLBACK_IP = (30, 900)
+_FLOW_TTL = timedelta(minutes=10)
+_BINDING_COOKIE = "sis_oidc"
+_BINDING_PATH = "/api/auth"
 
 
 def _user_payload(row) -> dict:
@@ -112,251 +56,170 @@ def _user_payload(row) -> dict:
     }
 
 
-@router.post("/auth/register")
-async def register(payload: RegisterRequest, request: Request) -> dict:
-    """Start a registration. Always reports success.
+def _safe_return_to(raw: Optional[str]) -> str:
+    """Only same-site paths: "/score/x", never "//evil.example" or a URL."""
+    if not raw or not raw.startswith("/") or raw.startswith("//") or "\\" in raw:
+        return "/"
+    return raw[:500]
 
-    The response is identical whether the address is new, already registered,
-    or not permitted. Anything else turns this endpoint into a way to ask the
-    server which addresses have accounts.
-    """
-    email = _clean_email(payload.email)
-    first_name = payload.first_name.strip()
-    last_name = payload.last_name.strip()
-    if not first_name or not last_name:
-        raise _fail(
-            status.HTTP_400_BAD_REQUEST,
-            "missing_name",
-            "First and last name are required.",
-        )
 
-    ip = client_ip(request)
+def _to_login_page(code: str) -> RedirectResponse:
+    response = RedirectResponse(f"/login?error={quote(code)}", status_code=status.HTTP_302_FOUND)
+    response.delete_cookie(_BINDING_COOKIE, path=_BINDING_PATH)
+    return response
+
+
+@router.get("/auth/login")
+async def login(request: Request, return_to: Optional[str] = None) -> RedirectResponse:
+    """Start a sign-in: remember state/nonce/PKCE server-side, go to Entra."""
+    if not settings.sso_configured:
+        return _to_login_page("sso_not_configured")
+
     pool = await get_pool()
-
     async with pool.acquire() as conn:
-        await enforce(conn, f"register:ip:{ip}", *_REGISTER_IP)
-        await enforce(conn, f"register:email:{email}", *_REGISTER_EMAIL)
-
-        # Hashed before either early return so that a rejected address costs
-        # the same wall time as an accepted one.
-        temp_password = issue_temp_password()
-        temp_hash = hash_password(normalize_temp_password(temp_password))
-
-        # The audit log is internal, so it may record the outcome the
-        # response deliberately hides. It never records the address.
-        if not settings.registration_permitted(email):
-            logger.warning("Registration blocked, not on allowlist: %s", email)
-            audit("auth.register", "denied", request=request, reason="not_allowlisted")
-            return {"status": "sent"}
-
-        if await conn.fetchval("SELECT 1 FROM identity.users WHERE email = $1", email):
-            logger.info("Registration for an existing account, ignored: %s", email)
-            audit("auth.register", "denied", request=request, reason="account_exists")
-            return {"status": "sent"}
-
-        expires_at = datetime.now(timezone.utc) + timedelta(
-            hours=settings.auth_temp_password_ttl_hours
-        )
+        await enforce(conn, f"sso-login:ip:{client_ip(request)}", *_LOGIN_IP)
+        state, nonce, binding = oidc.new_secret(), oidc.new_secret(), oidc.new_secret()
+        verifier = oidc.new_code_verifier()
         await conn.execute(
             """
-            INSERT INTO identity.pending_registrations
-                (email, first_name, last_name, temp_password_hash, expires_at)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (email) WHERE consumed_at IS NULL
-            DO UPDATE SET
-                first_name            = EXCLUDED.first_name,
-                last_name             = EXCLUDED.last_name,
-                temp_password_hash    = EXCLUDED.temp_password_hash,
-                expires_at            = EXCLUDED.expires_at,
-                attempts              = 0,
-                delivery_status       = 'not_sent',
-                delivery_attempted_at = NULL,
-                created_at            = now()
+            INSERT INTO identity.oidc_logins
+                (state_hash, binding_hash, nonce, code_verifier, return_to, expires_at)
+            VALUES ($1, $2, $3, $4, $5, $6)
             """,
-            email,
-            first_name,
-            last_name,
-            temp_hash,
-            expires_at,
+            oidc.sha256_hex(state), oidc.sha256_hex(binding), nonce, verifier,
+            _safe_return_to(return_to), datetime.now(timezone.utc) + _FLOW_TTL,
         )
 
-    # Stands in for delivery until an email provider is chosen.
-    logger.info("Temporary password for %s: %s", email, temp_password)
-    audit("auth.register", "success", request=request)
-    return {"status": "sent"}
-
-
-@router.post("/auth/set-password")
-async def set_password(
-    payload: SetPasswordRequest, request: Request, response: Response
-) -> dict:
-    """Exchange a temporary password for a real one, creating the account."""
     try:
-        user = await _set_password(payload, request, response)
-    except HTTPException as e:
-        # rate_limited is already audited where it is enforced.
-        if _failure_reason(e) != "rate_limited":
-            audit("auth.set_password", "failure", request=request, reason=_failure_reason(e))
-        raise
-    audit(
-        "auth.set_password", "success", actor_user_id=user["id"],
-        participant_id=user["participant_id"], request=request,
+        url = await oidc.authorization_url(state=state, nonce=nonce, verifier=verifier)
+    except Exception as e:
+        logger.warning("Entra discovery failed: %s", type(e).__name__)
+        return _to_login_page("sso_unavailable")
+
+    response = RedirectResponse(url, status_code=status.HTTP_302_FOUND)
+    response.set_cookie(
+        _BINDING_COOKIE, binding, max_age=int(_FLOW_TTL.total_seconds()),
+        httponly=True, secure=settings.is_production, samesite="lax", path=_BINDING_PATH,
     )
-    return _user_payload(user)
+    return response
 
 
-async def _set_password(payload: SetPasswordRequest, request: Request, response: Response):
-    email = _clean_email(payload.email)
-    temp_password = normalize_temp_password(payload.temp_password)
+@router.get("/auth/callback")
+async def callback(
+    request: Request,
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+) -> RedirectResponse:
+    """Finish a sign-in. Every failure lands on /login?error=<code>, audited."""
 
-    ip = client_ip(request)
-    pool = await get_pool()
-
-    async with pool.acquire() as conn:
-        await enforce(conn, f"set-password:ip:{ip}", *_SET_PASSWORD_IP)
-        await enforce(conn, f"set-password:email:{email}", *_SET_PASSWORD_EMAIL)
-
-        pending = await conn.fetchrow(
-            """
-            SELECT id, first_name, last_name, temp_password_hash, expires_at, attempts
-            FROM identity.pending_registrations
-            WHERE email = $1 AND consumed_at IS NULL
-            """,
-            email,
+    def refuse(reason: str, user_id=None, participant_id=None) -> RedirectResponse:
+        audit(
+            "auth.login", "failure", actor_user_id=user_id, participant_id=participant_id,
+            request=request, method="sso", reason=reason,
         )
-        if pending is None:
-            raise _fail(
-                status.HTTP_400_BAD_REQUEST,
-                "no_pending_registration",
-                "That temporary password is no longer valid. Request a new one.",
-            )
-        if pending["expires_at"] <= datetime.now(timezone.utc):
-            raise _fail(
-                status.HTTP_400_BAD_REQUEST,
-                "expired",
-                "That temporary password has expired. Request a new one.",
-            )
-        if pending["attempts"] >= settings.auth_max_temp_password_attempts:
-            raise _fail(
-                status.HTTP_400_BAD_REQUEST,
-                "too_many_attempts",
-                "Too many incorrect attempts. Request a new temporary password.",
-            )
+        return _to_login_page(reason)
 
-        if not verify_password(pending["temp_password_hash"], temp_password):
-            await conn.execute(
-                "UPDATE identity.pending_registrations SET attempts = attempts + 1 WHERE id = $1",
-                pending["id"],
-            )
-            raise _fail(
-                status.HTTP_401_UNAUTHORIZED,
-                "invalid_temp_password",
-                "That temporary password is not correct.",
-            )
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await enforce(conn, f"sso-callback:ip:{client_ip(request)}", *_CALLBACK_IP)
 
-        failures = password_policy_failures(payload.new_password)
-        if failures:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "code": "weak_password",
-                    "message": "That password does not meet the requirements.",
-                    "failed": failures,
-                },
-            )
+        if error:
+            # Entra's own refusal (cancelled, not assigned, MFA failed, ...).
+            return refuse("idp_" + "".join(c for c in error if c.isalnum() or c == "_")[:40])
+        if not code or not state:
+            return refuse("missing_code")
 
-        password_hash = hash_password(payload.new_password)
+        # Single use: the row is consumed whether or not what follows succeeds.
+        flow = await conn.fetchrow(
+            "DELETE FROM identity.oidc_logins WHERE state_hash = $1 RETURNING *",
+            oidc.sha256_hex(state),
+        )
+        if flow is None or flow["expires_at"] <= datetime.now(timezone.utc):
+            return refuse("unknown_or_expired_state")
+        binding = request.cookies.get(_BINDING_COOKIE)
+        if not binding or oidc.sha256_hex(binding) != flow["binding_hash"]:
+            return refuse("browser_mismatch")
 
-        # One transaction so an account can never exist with its registration
-        # still open, nor a registration be consumed without an account.
+        try:
+            token = await oidc.exchange_code(code, flow["code_verifier"])
+            claims = await oidc.validate_id_token(token, nonce=flow["nonce"])
+            who = oidc.identity_from_claims(claims)
+        except oidc.OIDCError as e:
+            return refuse(e.code)
+        except Exception as e:
+            logger.warning("Entra sign-in failed: %s", type(e).__name__)
+            return refuse("sso_unavailable")
+
         async with conn.transaction():
-            # The pseudonym is minted with the account, in the same
-            # transaction, so no account ever exists without one.
-            participant_id = await conn.fetchval(
-                "INSERT INTO participants DEFAULT VALUES RETURNING participant_id"
-            )
-            user = await conn.fetchrow(
-                """
-                INSERT INTO identity.users
-                    (email, first_name, last_name, password_hash, participant_id)
-                VALUES ($1, $2, $3, $4, $5)
-                ON CONFLICT (email) DO NOTHING
-                RETURNING id, participant_id, email, first_name, last_name
-                """,
-                email,
-                pending["first_name"],
-                pending["last_name"],
-                password_hash,
-                participant_id,
-            )
+            user = await _resolve_account(conn, who)
             if user is None:
-                # An account appeared between the check in register and now.
-                raise _fail(
-                    status.HTTP_409_CONFLICT,
-                    "account_exists",
-                    "An account already exists for that address. Sign in instead.",
-                )
+                return refuse("account_disabled")
+            await _sync_roles(conn, user["id"], who.roles)
+            token_value, _ = await create_session(conn, user["id"], remember=False)
 
-            await conn.execute(
-                "UPDATE identity.pending_registrations SET consumed_at = now() WHERE id = $1",
-                pending["id"],
-            )
-            token, _ = await create_session(conn, user["id"], remember=False)
+    audit(
+        "auth.login", "success", actor_user_id=user["id"], participant_id=user["participant_id"],
+        request=request, method="sso", roles=sorted(who.roles),
+    )
+    response = RedirectResponse(flow["return_to"], status_code=status.HTTP_302_FOUND)
+    response.delete_cookie(_BINDING_COOKIE, path=_BINDING_PATH)
+    set_session_cookie(response, token_value, remember=False)
+    return response
 
-    set_session_cookie(response, token, remember=False)
-    logger.info("Account created: %s", email)
+
+async def _resolve_account(conn, who: oidc.SignInIdentity):
+    """The account for this Entra identity — and so its pseudonym, which is
+    what lets a student resume across days. Created on first sign-in."""
+    user = await conn.fetchrow(
+        "SELECT id, participant_id, is_active FROM identity.users WHERE entra_subject = $1",
+        who.subject,
+    )
+    if user is None:
+        # An account from before SSO: linked once, by the institutional address
+        # Entra vouches for, so its existing work stays with the student.
+        user = await conn.fetchrow(
+            """
+            UPDATE identity.users SET entra_subject = $1
+            WHERE email = $2 AND entra_subject IS NULL
+            RETURNING id, participant_id, is_active
+            """,
+            who.subject, who.email,
+        )
+    if user is None:
+        participant_id = await conn.fetchval(
+            "INSERT INTO participants DEFAULT VALUES RETURNING participant_id"
+        )
+        user = await conn.fetchrow(
+            """
+            INSERT INTO identity.users (email, first_name, last_name, participant_id, entra_subject)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, participant_id, is_active
+            """,
+            who.email, who.first_name, who.last_name, participant_id, who.subject,
+        )
+    if not user["is_active"]:
+        return None
+    await conn.execute(
+        """
+        UPDATE identity.users
+           SET email = $2, first_name = $3, last_name = $4,
+               last_login_at = now(), updated_at = now()
+         WHERE id = $1
+        """,
+        user["id"], who.email, who.first_name, who.last_name,
+    )
     return user
 
 
-@router.post("/auth/login")
-async def login(
-    payload: LoginRequest, request: Request, response: Response
-) -> dict:
-    email = payload.email.strip().lower()
-    ip = client_ip(request)
-    pool = await get_pool()
-
-    async with pool.acquire() as conn:
-        await enforce(conn, f"login:ip:{ip}", *_LOGIN_IP)
-        await enforce(conn, f"login:email:{email}", *_LOGIN_EMAIL)
-
-        user = await conn.fetchrow(
-            """
-            SELECT id, participant_id, email, first_name, last_name, password_hash
-            FROM identity.users
-            WHERE email = $1 AND is_active
-            """,
-            email,
+async def _sync_roles(conn, user_id, roles: frozenset[str]) -> None:
+    """Entra app-role assignments are the source of truth: replaced every sign-in."""
+    await conn.execute("DELETE FROM identity.account_roles WHERE user_id = $1", user_id)
+    for role in sorted(roles):
+        await conn.execute(
+            "INSERT INTO identity.account_roles (user_id, role, granted_by) VALUES ($1, $2, 'entra')",
+            user_id, role,
         )
-        # verify_password burns the same time on a missing row as on a real
-        # one, so "no such account" and "wrong password" are indistinguishable
-        # in both content and latency.
-        if not verify_password(user["password_hash"] if user else None, payload.password):
-            # The targeted account, when there is one, so the SIEM can see an
-            # account being guessed at. Never the address that was typed.
-            audit(
-                "auth.login",
-                "failure",
-                actor_user_id=user["id"] if user else None,
-                participant_id=user["participant_id"] if user else None,
-                request=request,
-                reason="invalid_credentials" if user else "unknown_account",
-            )
-            raise _fail(
-                status.HTTP_401_UNAUTHORIZED,
-                "invalid_credentials",
-                "We couldn't sign you in with those credentials.",
-            )
-
-        token, _ = await create_session(conn, user["id"], remember=payload.remember)
-
-    set_session_cookie(response, token, remember=payload.remember)
-    audit(
-        "auth.login", "success", actor_user_id=user["id"],
-        participant_id=user["participant_id"], request=request,
-        remember=payload.remember,
-    )
-    return _user_payload(user)
 
 
 @router.post("/auth/logout")

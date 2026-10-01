@@ -17,29 +17,15 @@
 import { ReactNode } from 'react'
 
 const COPY = {
-  login: {
-    headline: 'Stakeholder Engagement Simulator',
-    // Tuned so the fluid middle term lands on the mockup's 68px at 1280px
-    // wide, then keeps scaling instead of stopping there.
-    headlineClass: 'text-[32px] lg:text-[clamp(40px,5.3vw,76px)] tracking-[-0.03em]',
-    body: 'Interview AI stakeholder personas for your Global Projects work. Sign in to start a session.',
-  },
-  register: {
-    headline: 'Join the Lab',
-    // Likewise 88px at 1280px wide.
-    headlineClass: 'text-[40px] lg:text-[clamp(48px,6.9vw,100px)] tracking-[-0.035em]',
-    body: 'Access is open to the WPI community. Request an account with your @wpi.edu address.',
-  },
+  headline: 'Stakeholder Engagement Simulator',
+  // Tuned so the fluid middle term lands on the mockup's 68px at 1280px
+  // wide, then keeps scaling instead of stopping there.
+  headlineClass: 'text-[32px] lg:text-[clamp(40px,5.3vw,76px)] tracking-[-0.03em]',
+  body: 'Interview AI stakeholder personas for your Global Projects work. Sign in with your WPI account to start a session.',
 }
 
-export default function AuthLayout({
-  variant,
-  children,
-}: {
-  variant: 'login' | 'register'
-  children: ReactNode
-}) {
-  const copy = COPY[variant]
+export default function AuthLayout({ children }: { children: ReactNode }) {
+  const copy = COPY
 
   return (
     <div className="flex min-h-screen flex-col bg-white font-poppins text-ink [color-scheme:light]">

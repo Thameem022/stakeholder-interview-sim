@@ -1,29 +1,23 @@
-"""Test-wide environment and shared fixtures.
+"""Shared fixtures.
 
-The environment line must run before any test module imports `app`, which
-pytest guarantees for conftest. While the fixed temporary password is active,
-registration is closed unless an allowlist says otherwise — so the suite opens
-the domain explicitly, exactly as a developer would in their own .env.
+Sign-in is Entra ID only, so most tests do not go through it: they create an
+account (and its pseudonym) directly and attach a real app session cookie.
+tests/test_sso.py drives the actual sign-in flow against a fake Entra.
 """
 
 from __future__ import annotations
 
-import os
+import uuid
+from datetime import datetime, timedelta, timezone
 
-os.environ.setdefault("AUTH_REGISTRATION_ALLOWLIST", "*@wpi.edu")
+import pytest
+from fastapi.testclient import TestClient
 
-import uuid  # noqa: E402
-
-import pytest  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-
-from app.auth.csrf import CSRF_HEADER, SAFE_METHODS  # noqa: E402
-from app.config import settings  # noqa: E402
-from app.main import app  # noqa: E402
-from tests.db import TEST_PREFIX, cleanup_test_rows, sql  # noqa: E402
-
-TEMP = settings.auth_dev_temp_password
-GOOD_PASSWORD = "Harbortown!2026x"
+from app.auth.csrf import CSRF_HEADER, SAFE_METHODS
+from app.auth.sessions import generate_session_token, hash_session_token
+from app.config import settings
+from app.main import app
+from tests.db import TEST_PREFIX, cleanup_test_rows, scalar, sql
 
 
 class CSRFTestClient(TestClient):
@@ -67,40 +61,59 @@ def email() -> str:
     return f"{TEST_PREFIX}{uuid.uuid4().hex[:12]}@wpi.edu"
 
 
-def register(client: TestClient, email: str):
-    return client.post(
-        "/api/auth/register",
-        json={"first_name": "Alex", "last_name": "Rivera", "email": email},
+def create_account(email: str, first: str = "Alex", last: str = "Rivera") -> str:
+    """An Entra-backed account and its pseudonym, as a first sign-in would make
+    them. Returns the account id."""
+    pid = scalar("INSERT INTO participants DEFAULT VALUES RETURNING participant_id::text")
+    return scalar(
+        """
+        INSERT INTO identity.users (email, first_name, last_name, participant_id, entra_subject)
+        VALUES (%s, %s, %s, %s, %s) RETURNING id::text
+        """,
+        (email, first, last, pid, str(uuid.uuid4())),
     )
 
 
-def set_password(client: TestClient, email: str, temp=TEMP, new=GOOD_PASSWORD):
-    return client.post(
-        "/api/auth/set-password",
-        json={"email": email, "temp_password": temp, "new_password": new},
-    )
+def sign_in_as(client: TestClient, email: str) -> str:
+    """Swap the client's identity to `email`'s account, returning the cookie.
 
-
-def sign_in_as(client: TestClient, email: str, password: str = GOOD_PASSWORD) -> str:
-    """Swap the client's identity, returning the new session cookie.
-
+    Issues a real app session, exactly what a completed Entra sign-in issues.
     Identity is swapped on the one client rather than by building a second
     TestClient: `init_pool` writes a module-level global, so two concurrent
     lifespans would fight over the same `_pool`.
     """
+    token = generate_session_token()
+    sql(
+        """
+        INSERT INTO identity.auth_sessions (user_id, token_hash, expires_at)
+        SELECT id, %s, %s FROM identity.users WHERE email = %s
+        """,
+        (hash_session_token(token), datetime.now(timezone.utc) + timedelta(hours=12), email),
+    )
     client.cookies.clear()
-    r = client.post("/api/auth/login", json={"email": email, "password": password})
-    assert r.status_code == 200, r.text
-    return client.cookies.get(settings.auth_cookie_name)
+    client.cookies.set(settings.auth_cookie_name, token)
+    return token
+
+
+def enroll(client: TestClient, *roles: str, email: str | None = None) -> tuple[str, str]:
+    """Create an account (with app roles) and sign the client in as it.
+    Returns (email, account id)."""
+    email = email or f"{TEST_PREFIX}{uuid.uuid4().hex[:12]}@wpi.edu"
+    user_id = create_account(email)
+    for role in roles:
+        sql(
+            "INSERT INTO identity.account_roles (user_id, role, granted_by) VALUES (%s, %s, 'test')",
+            (user_id, role),
+        )
+    sign_in_as(client, email)
+    return email, user_id
 
 
 @pytest.fixture
 def logged_in_client(client, email):
     """A TestClient carrying a real session cookie. Yields (client, user_id)."""
-    register(client, email)
-    r = set_password(client, email)
-    assert r.status_code == 200, r.text
-    yield client, r.json()["id"]
+    _, user_id = enroll(client, email=email)
+    yield client, user_id
 
 
 @pytest.fixture

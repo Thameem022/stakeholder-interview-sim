@@ -17,7 +17,7 @@ import pytest
 from app.config import get_settings, settings
 from app.observability import audit as audit_mod
 from app.realtime.notice import NOTICE_VERSION
-from tests.conftest import GOOD_PASSWORD, TEMP, register, set_password, sign_in_as
+from tests.conftest import enroll, sign_in_as
 from tests.db import participant_of, scalar
 
 SECRET = "my-private-disclosure-91ab"
@@ -56,11 +56,7 @@ def _no_pii(cap: _Capture, *needles: str) -> None:
 
 
 def _new_user(client) -> tuple[str, str]:
-    email = f"sis-test-{uuid.uuid4().hex[:12]}@wpi.edu"
-    register(client, email)
-    r = set_password(client, email)
-    assert r.status_code == 200, r.text
-    return email, r.json()["id"]
+    return enroll(client)
 
 
 # --- the event shape ---------------------------------------------------------
@@ -91,52 +87,17 @@ def test_long_values_are_capped(audit_log):
 
 
 # --- authentication ----------------------------------------------------------
+# Sign-in success and failure events are produced by the Entra flow and are
+# tested end to end in tests/test_sso.py.
 
 
-def test_register_and_account_creation_are_audited_without_the_address(client, audit_log):
+def test_logout_is_audited_with_actor_and_pseudonym(client, audit_log):
     email, user_id = _new_user(client)
-    assert audit_log.named("auth.register")[0]["outcome"] == "success"
-    (created,) = audit_log.named("auth.set_password")
-    assert created["outcome"] == "success" and created["actor_user_id"] == user_id
-    assert created["ip"] and created["path"] == "/api/auth/set-password"
-    _no_pii(audit_log, email, TEMP, GOOD_PASSWORD)
-
-
-def test_a_wrong_temporary_password_is_audited(client, email, audit_log):
-    register(client, email)
-    set_password(client, email, temp="WRONG-WRONG-1")
-    (event,) = audit_log.named("auth.set_password")
-    assert event["outcome"] == "failure" and event["reason"] == "invalid_temp_password"
-    _no_pii(audit_log, email, "WRONG-WRONG-1")
-
-
-def test_login_success_and_logout_are_audited(client, audit_log):
-    email, user_id = _new_user(client)
-    sign_in_as(client, email)
     client.post("/api/auth/logout")
-
-    login = [e for e in audit_log.named("auth.login") if e["outcome"] == "success"]
-    assert login[-1]["actor_user_id"] == user_id
-    assert login[-1]["participant_id"] == participant_of(user_id)
-    assert login[-1]["participant_id"] != user_id
     (logout,) = audit_log.named("auth.logout")
     assert logout["actor_user_id"] == user_id
-    _no_pii(audit_log, email, GOOD_PASSWORD)
-
-
-def test_failed_login_names_the_targeted_account_but_not_the_address(client, audit_log):
-    email, user_id = _new_user(client)
-    client.cookies.clear()
-    client.post("/api/auth/login", json={"email": email, "password": "Not-The-Password-1"})
-    client.post(
-        "/api/auth/login",
-        json={"email": "sis-test-nobody@wpi.edu", "password": "Not-The-Password-1"},
-    )
-
-    known, unknown = [e for e in audit_log.named("auth.login") if e["outcome"] == "failure"]
-    assert known["actor_user_id"] == user_id and known["reason"] == "invalid_credentials"
-    assert unknown["actor_user_id"] is None and unknown["reason"] == "unknown_account"
-    _no_pii(audit_log, email, "sis-test-nobody@wpi.edu", "Not-The-Password-1")
+    assert logout["participant_id"] == participant_of(user_id) != user_id
+    _no_pii(audit_log, email)
 
 
 def test_a_forged_session_cookie_is_audited(client, audit_log):

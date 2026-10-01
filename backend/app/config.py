@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
     port: int = 8000
 
-    # "dev" or "prod". Gates cookie Secure and the fixed-temp-password guard.
+    # "dev" or "prod". Gates cookie Secure and the production boot checks.
     environment: str = "dev"
 
     # Comma-separated origins allowed to call the API cross-origin with
@@ -81,21 +81,22 @@ class Settings(BaseSettings):
     # it. Purely informational, so throttling costs nothing but saves ~100
     # single-row updates per interview.
     auth_session_touch_interval_seconds: int = 60
-    auth_min_password_length: int = 12
-    auth_temp_password_ttl_hours: int = 24
-    auth_max_temp_password_attempts: int = 10
 
-    # "fixed" hands every registration the same known constant below. That is
-    # only viable while no email is sent; get_settings() refuses to boot with
-    # it in production. "random" generates a real one per registration.
-    auth_temp_password_mode: str = "fixed"
-    auth_dev_temp_password: str = "7QF-42KD-XM"
-
-    # Comma-separated addresses permitted to register while the fixed
-    # temporary password is active. An entry is either a full address or a
-    # domain wildcard ("*@wpi.edu"). An empty list permits nobody, so opening
-    # registration up is always a deliberate act rather than a default.
-    auth_registration_allowlist: str = ""
+    # Microsoft Entra ID (OIDC) — the only way to sign in (SEC-IAM-001).
+    # Tenant and client ids identify the app registration; they are not
+    # secrets, but are deployment config and never committed with real values.
+    # The client secret is injected from the vault / service environment.
+    entra_tenant_id: str = ""
+    entra_client_id: str = ""
+    entra_client_secret: str = ""
+    # The callback registered in Entra, e.g. https://<host>/api/auth/callback.
+    entra_redirect_uri: str = ""
+    # Microsoft's endpoint. Development may point this at the local mock
+    # provider (scripts/dev_oidc_provider.py); production refuses anything else.
+    entra_authority: str = "https://login.microsoftonline.com"
+    # Defence in depth on top of Entra's "assignment required": a token with no
+    # recognised app role (Student, Instructor, ...) is refused.
+    entra_require_app_role: bool = True
 
     @property
     def is_production(self) -> bool:
@@ -117,28 +118,12 @@ class Settings(BaseSettings):
         return f"__Host-{name}" if self.is_production else name
 
     @property
-    def registration_allowlist(self) -> set[str]:
-        return {
-            e.strip().lower()
-            for e in self.auth_registration_allowlist.split(",")
-            if e.strip()
-        }
-
-    def registration_permitted(self, email: str) -> bool:
-        """Whether `email` may open a registration.
-
-        Only consulted while the temporary password is the fixed constant —
-        with a per-registration password there is nothing to gate, because
-        knowing the constant is no longer enough to claim someone's address.
-        """
-        if self.auth_temp_password_mode != "fixed":
-            return True
-        email = email.strip().lower()
-        allowed = self.registration_allowlist
-        return email in allowed or f"*@{email.rpartition('@')[2]}" in allowed
+    def sso_configured(self) -> bool:
+        return bool(self.entra_tenant_id and self.entra_client_id and self.entra_redirect_uri)
 
 
 _DEV_FRONTEND_ORIGIN = "http://localhost:5173"
+ENTRA_AUTHORITY = "https://login.microsoftonline.com"
 _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "[::1]", "::1", "0.0.0.0"}
 
 
@@ -159,45 +144,47 @@ def check_cors_origins(s: Settings) -> None:
             )
 
 
+def check_sso(s: Settings) -> None:
+    """Production signs in through Microsoft's Entra endpoint, over HTTPS, with
+    every setting present — or it does not start."""
+    if not s.is_production:
+        return
+    missing = [
+        name for name, value in (
+            ("ENTRA_TENANT_ID", s.entra_tenant_id),
+            ("ENTRA_CLIENT_ID", s.entra_client_id),
+            ("ENTRA_CLIENT_SECRET", s.entra_client_secret),
+            ("ENTRA_REDIRECT_URI", s.entra_redirect_uri),
+        ) if not value
+    ]
+    if missing:
+        raise RuntimeError(f"ENVIRONMENT=prod needs {', '.join(missing)} for Entra sign-in.")
+    if s.entra_authority.rstrip("/") != ENTRA_AUTHORITY:
+        raise RuntimeError(
+            f"ENTRA_AUTHORITY={s.entra_authority!r} cannot run with ENVIRONMENT=prod; "
+            f"production signs in only through {ENTRA_AUTHORITY}."
+        )
+    if not s.entra_redirect_uri.startswith("https://"):
+        raise RuntimeError("ENTRA_REDIRECT_URI must be https:// in production.")
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     s = Settings()
     check_cors_origins(s)
+    check_sso(s)
     # Bridge loaded values into os.environ so libraries that read directly
     # (langchain ChatOpenAI, openai SDK, scorers using os.getenv) all see them.
     # Do not overwrite values the user already set in their shell.
     if s.openai_api_key and not os.environ.get("OPENAI_API_KEY"):
         os.environ["OPENAI_API_KEY"] = s.openai_api_key
 
-    # A fixed temp password plus open @wpi.edu registration means anyone who
-    # knows the constant can claim any address. Fail the boot rather than warn:
-    # a warning scrolls past, a refused start does not.
-    if s.is_production and s.auth_temp_password_mode == "fixed":
-        raise RuntimeError(
-            "AUTH_TEMP_PASSWORD_MODE=fixed cannot run with ENVIRONMENT=prod: "
-            "every account would share one known temporary password. Set "
-            "AUTH_TEMP_PASSWORD_MODE=random (once email delivery exists) or "
-            "run with ENVIRONMENT=dev."
+    if not s.sso_configured:
+        logging.getLogger(__name__).warning(
+            "Entra sign-in is not configured (ENTRA_TENANT_ID / ENTRA_CLIENT_ID / "
+            "ENTRA_REDIRECT_URI); nobody can sign in. For local development, run "
+            "scripts/dev_oidc_provider.py and point ENTRA_AUTHORITY at it."
         )
-
-    if s.auth_temp_password_mode == "fixed":
-        log = logging.getLogger(__name__)
-        allowed = sorted(s.registration_allowlist)
-        log.warning(
-            "Auth is using the FIXED development temporary password. "
-            "Registration allowlist: %s",
-            ", ".join(allowed) or "(empty)",
-        )
-        if not allowed:
-            # Not fatal: the rest of the app is unrelated to auth and should
-            # still run. But registration silently accepting nobody is worth
-            # saying out loud, because the endpoint stays deliberately quiet.
-            log.warning(
-                "No AUTH_REGISTRATION_ALLOWLIST set, so no address can register. "
-                "Set it to specific addresses, or to '*@%s' to allow the whole "
-                "domain.",
-                s.auth_email_domain,
-            )
 
     return s
 

@@ -12,7 +12,7 @@ import pytest
 
 from app.auth.csrf import CSRF_HEADER
 from app.config import Settings, check_cors_origins, settings
-from tests.conftest import GOOD_PASSWORD, register, set_password, sign_in_as
+from tests.conftest import enroll, sign_in_as
 from tests.db import scalar
 
 # --- 4.1 retrieval is bound to the caller's own session ----------------------
@@ -66,10 +66,8 @@ def test_retrieval_against_another_users_session_is_refused(
     _, user_a = logged_in_client
     sid = owned_session(user_a)
 
-    email_b = f"sis-test-{uuid.uuid4().hex[:12]}@wpi.edu"
-    register(client, email_b)
-    assert set_password(client, email_b).status_code == 200
-    sign_in_as(client, email_b, GOOD_PASSWORD)
+    email_b, _ = enroll(client)
+    sign_in_as(client, email_b)
 
     r = _retrieve(client, sid)
     # 404, not 403: must not confirm the id names a real session.
@@ -141,16 +139,6 @@ def test_write_with_mismatched_csrf_header_is_rejected(logged_in_client):
     r = client.post(
         "/api/auth/logout", headers={CSRF_HEADER: "not-the-cookie-value"}
     )
-    assert r.status_code == 403
-
-
-def test_login_itself_needs_the_csrf_token(client, email):
-    """Login CSRF: a cross-site page must not be able to sign the victim in."""
-    register(client, email)
-    assert set_password(client, email).status_code == 200
-    client.cookies.clear()
-    client.csrf_auto = False
-    r = client.post("/api/auth/login", json={"email": email, "password": GOOD_PASSWORD})
     assert r.status_code == 403
 
 

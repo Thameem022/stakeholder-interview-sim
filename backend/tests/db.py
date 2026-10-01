@@ -73,7 +73,8 @@ def cleanup_test_rows() -> None:
         """,
         (_TEST_LIKE,),
     )
-    sql("DELETE FROM identity.pending_registrations WHERE email LIKE %s", (_TEST_LIKE,))
+    # In-flight sign-ins started by tests (they always pass a /__sso_test return path).
+    sql("DELETE FROM identity.oidc_logins WHERE return_to LIKE '/__sso_test%%'")
     # Rate-limit buckets embed the address, and IP buckets are shared by every
     # test, so clear the whole table or later tests inherit earlier counts.
     sql("DELETE FROM identity.auth_rate_limits")

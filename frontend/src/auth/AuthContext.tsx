@@ -19,6 +19,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 
 import { AuthUser, getMe, logout as logoutRequest, setUnauthorizedHandler } from '../api'
+import { startSignIn } from './sso'
 
 interface AuthState {
   user: AuthUser | null
@@ -68,7 +69,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return
         }
         setUser(null)
-        navigate('/login', { replace: true, state: { reason: 'session_expired' } })
+        // Back through SSO; usually silent while the WPI session is alive.
+        if (!startSignIn(window.location.pathname + window.location.search)) {
+          navigate('/login?error=session_expired', { replace: true })
+        }
       } finally {
         checking.current = false
       }
@@ -80,12 +84,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await logoutRequest()
     } finally {
-      // Clear locally even if the request failed: the cookie may already be
-      // gone, and leaving a stale name in the header would be worse.
-      setUser(null)
-      navigate('/login', { replace: true })
+      // Leave even if the request failed: the cookie may already be gone.
+      // A full page load to the landing page, not a route change: clearing the
+      // user first would let a protected route see "signed out" and send the
+      // browser straight back through single sign-on. The reload also drops
+      // every bit of in-memory state from the session.
+      window.location.replace('/login?signed_out=1')
     }
-  }, [navigate])
+  }, [])
 
   return (
     <AuthContext.Provider value={{ user, loading, signOut, refresh }}>

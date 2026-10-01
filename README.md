@@ -99,20 +99,24 @@ npm run dev
 # Open http://localhost:5173 — Vite proxies /api to :8000
 ```
 
-### First sign-in
+### Signing in
 
-There is **no email delivery yet**, so registration runs in fixed-temporary-
-password mode:
+Sign-in is **WPI single sign-on (Microsoft Entra ID, OIDC + PKCE) only**. There
+are no SES passwords or local accounts. Opening the app signed out goes straight
+to the sign-in page; the first sign-in creates the account and its pseudonymous
+participant ID, and later sign-ins resume the same one.
 
-1. Register at `/register` with an address matching
-   `AUTH_REGISTRATION_ALLOWLIST` (default `*@wpi.edu`).
-2. Exchange `AUTH_DEV_TEMP_PASSWORD` (default `7QF-42KD-XM`) for a real
-   password of at least `AUTH_MIN_PASSWORD_LENGTH` characters.
+For local development without an Entra tenant, run the bundled **mock identity
+provider**. It speaks the same protocol, so the app runs its one real sign-in
+path:
 
-Registration is two-phase: `register` only writes a `pending_registrations`
-row, and a `users` row appears only when the temporary password is exchanged.
-An empty `AUTH_REGISTRATION_ALLOWLIST` permits **nobody** — opening
-registration up is meant to be deliberate.
+```bash
+cd backend && uv run python -m scripts.dev_oidc_provider   # http://127.0.0.1:9999
+```
+
+Set the development `ENTRA_*` values shown in [.env.example](.env.example).
+The mock lets you pick an address and app roles. It binds to loopback only, and
+production refuses to start with any authority but Microsoft's.
 
 ## Environment variables
 
@@ -120,17 +124,17 @@ registration up is meant to be deliberate.
 |---|---|---|
 | `OPENAI_API_KEY` | Yes | Realtime API + embeddings + IQR/SIC scoring |
 | `DATABASE_URL` | Yes | `postgresql+asyncpg://user:pass@host:5432/db` |
-| `ENVIRONMENT` | No | `dev` (default) or `prod`. `prod` makes the session cookie `Secure` and refuses to boot while `AUTH_TEMP_PASSWORD_MODE=fixed` |
+| `ENVIRONMENT` | No | `dev` (default) or `prod`. `prod` makes cookies `Secure` and refuses to boot without a complete Entra configuration |
+| `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, `ENTRA_REDIRECT_URI` | Yes | The Entra app registration (placeholders in `.env.example`) |
+| `ENTRA_CLIENT_SECRET` | Yes | Injected from the vault / service environment, never committed |
+| `ENTRA_AUTHORITY` | No | `https://login.microsoftonline.com` (the only value production accepts) |
+| `ENTRA_REQUIRE_APP_ROLE` | No | Refuse tokens without a recognised app role (default `true`) |
 | `OPENAI_REALTIME_MODEL` | No | Defaults to `gpt-realtime` |
 | `EMBEDDING_MODEL` | No | Defaults to `text-embedding-3-small` |
 | `PORT` | No | Defaults to `8000` |
-| `AUTH_EMAIL_DOMAIN` | No | Institutional domain enforced at registration (`wpi.edu`) |
-| `AUTH_REGISTRATION_ALLOWLIST` | No | Who may register while the temp password is fixed. Empty = nobody |
-| `AUTH_TEMP_PASSWORD_MODE` | No | `fixed` (default) or `random`. Switch to `random` once email delivery exists |
-| `AUTH_DEV_TEMP_PASSWORD` | No | The shared temporary password while mode is `fixed` |
+| `AUTH_EMAIL_DOMAIN` | No | Institutional domain a signed-in address must have (`wpi.edu`) |
 | `AUTH_COOKIE_NAME` | No | Defaults to `sis_session` |
-| `AUTH_SESSION_DEFAULT_HOURS` / `AUTH_SESSION_REMEMBER_DAYS` | No | Session TTL without / with "remember me" |
-| `AUTH_MIN_PASSWORD_LENGTH`, `AUTH_TEMP_PASSWORD_TTL_HOURS`, `AUTH_MAX_TEMP_PASSWORD_ATTEMPTS`, `AUTH_SESSION_TOUCH_INTERVAL_SECONDS` | No | Auth tuning; see [.env.example](.env.example) |
+| `AUTH_SESSION_DEFAULT_HOURS`, `AUTH_SESSION_TOUCH_INTERVAL_SECONDS` | No | App session tuning; see [.env.example](.env.example) |
 | `LEGACY_SESSION_OWNER_EMAIL` | Once | Read **only** by migration `0005` to assign pre-auth sessions an owner |
 
 See [.env.example](.env.example) for the annotated set. Note that
@@ -139,8 +143,9 @@ overrides the application default.
 
 ## API surface
 
-Public: `GET /api/health`, and `/api/auth/register`, `/api/auth/set-password`,
-`/api/auth/login`, `/api/auth/logout`, `/api/auth/me`.
+Public: `GET /api/health`, and the sign-in endpoints `GET /api/auth/login`
+(starts Entra sign-in), `GET /api/auth/callback`, `POST /api/auth/logout`,
+`GET /api/auth/me`.
 
 Authenticated (declared once in `main.py`, not per route):
 `GET /api/personas`, `GET /api/voices`, `POST /api/realtime/token`,
@@ -175,7 +180,7 @@ Two conventions worth knowing:
 
 ## Database
 
-Nine Alembic migrations:
+Ten Alembic migrations:
 
 | Revision | Adds |
 |---|---|
@@ -188,6 +193,7 @@ Nine Alembic migrations:
 | `0007_pseudonymous_participants` | `participants`; sign-in tables moved to the restricted `identity` schema; sessions re-keyed from `user_id` to `participant_id`; pre-session notice acknowledgement |
 | `0008_research_and_incidents` | restricted `research` schema (consent, consented copies, export approvals + log); `identity.account_roles`; `session_flags`; `interview_sessions.purged_at` |
 | `0009_retention` | `deletion_log`; research consent no longer cascades from course participants |
+| `0010_entra_sso` | Entra ID sign-in: `identity.users.entra_subject`, `identity.oidc_logins`; drops `password_hash` and `pending_registrations` |
 
 ### Pseudonymous data model
 
@@ -274,8 +280,9 @@ which FastAPI serves with an SPA fallback.
   (`municipal_planner`, `urban_planner`); runtime keys are person slugs
   (`alex_martinez`). `resolve_persona_record` bridges them by alias — don't
   rename one side in isolation.
-- **`ENVIRONMENT=prod` with `AUTH_TEMP_PASSWORD_MODE=fixed` refuses to boot**,
-  because every account would share one known temporary password.
+- **`ENVIRONMENT=prod` refuses to boot** without a complete Entra configuration
+  (tenant, client, secret, `https://` redirect URI) pointed at Microsoft's
+  authority. The local mock identity provider can never stand in for it.
 
 ## Project layout
 

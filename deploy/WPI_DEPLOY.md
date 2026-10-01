@@ -146,6 +146,42 @@ EMBEDDING_MODEL=text-embedding-3-small
 PORT=8001
 ```
 
+### 7a. Register SES in Entra ID (single sign-on)
+
+Sign-in is Entra ID only (SR-2026-052 SEC-IAM-001). With the identity team:
+
+1. **App registration**, single tenant. Platform **Web**, redirect URI
+   `https://stakeholder-engagement-simulator.wpi.edu/api/auth/callback`.
+2. **Client secret** (or certificate). Store it in the vault and deliver it to
+   the service as `ENTRA_CLIENT_SECRET`. Never commit it, and rotate it on the
+   vault's schedule.
+3. **App roles.** The values must match exactly: `Student`, `Instructor`,
+   `StudyPersonnel`, `ExportApprover`, `SupportOwner`. SES syncs a user's roles
+   from these at every sign-in. A sign-in with none of them is refused.
+4. **Enterprise application → Properties → Assignment required = Yes.** Assign
+   the roster-driven ID2050 group to `Student`. Assign named staff to the other
+   roles, and give `StudyPersonnel` only to the IRB's approved study personnel.
+5. **Conditional Access:** require MFA for this application. No VPN is required;
+   assignment + MFA + TLS is the access control.
+6. **Token configuration:** add the optional ID-token claims `email`,
+   `given_name` and `family_name`.
+7. **Term end:** remove the term's group assignment (or let the roster sync do
+   it), so access ends with the course.
+
+Then add to the server `.env`, with the secret coming from the vault:
+
+```env
+ENTRA_TENANT_ID=<tenant-id>
+ENTRA_CLIENT_ID=<application-client-id>
+ENTRA_CLIENT_SECRET=<from-the-vault>
+ENTRA_REDIRECT_URI=https://stakeholder-engagement-simulator.wpi.edu/api/auth/callback
+ENVIRONMENT=prod
+```
+
+With `ENVIRONMENT=prod` the service refuses to start if any of these are
+missing, if the redirect URI is not `https://`, or if `ENTRA_AUTHORITY` is
+anything but `https://login.microsoftonline.com`.
+
 ### 8. Install backend deps into the uv-managed venv
 
 ```bash
@@ -162,10 +198,10 @@ cd /opt/stakeholder-engagement-simulator/backend
 sudo -u mohammedthameem uv run alembic upgrade head
 ```
 
-You should see every migration apply in order, `0001_initial` through `0007_pseudonymous_participants`.
+You should see every migration apply in order, `0001_initial` through `0010_entra_sso`.
 
 > **Before `0007` on a server:** the database owner (`sis`) cannot create roles,
-> so create the two access roles as the Postgres superuser **first** — the
+> so create the three access roles as the Postgres superuser **first** — the
 > migration then grants them the right access (and prints a NOTICE if they are
 > missing):
 >
@@ -181,11 +217,13 @@ You should see every migration apply in order, `0001_initial` through `0007_pseu
 > `research` schemas; only the IRB's approved study personnel get
 > `ses_study_personnel` (the `research` schema).
 >
+> If the roles are created after migrating, apply the `GRANT` statements from
+> migrations `0007`, `0008` and `0009` by hand. Do **not** downgrade and
+> re-upgrade to get them: the `0008` and `0010` downgrades are not lossless.
+>
 > Application roles (instructor, study personnel, export approver, support
-> owner) are separate and granted with `scripts/grant_role.py` — see
-> [RUNBOOK.md](RUNBOOK.md#roles-in-ses). If the roles are created after migrating, re-run the
-> grants: `alembic downgrade 0006_retrieval_events && alembic upgrade head`
-> (lossless), or apply the GRANTs from the migration by hand.
+> owner) are separate: they are Entra app-role assignments (step 7a), synced at
+> every sign-in — see [RUNBOOK.md](RUNBOOK.md#roles-in-ses).
 
 > **`alembic` does not load `.env`.** `alembic/env.py` falls back to the DSN in
 > `alembic.ini` (`postgres:postgres@localhost/sis`), which is not this server's
@@ -323,6 +361,12 @@ sudo systemctl status stakeholder-engagement-simulator
 ---
 
 ## Upgrading an existing install to authenticated access (migration 0005)
+
+> **Historical.** This applies only to an install still at migration `0004`. Its
+> step 1 used local registration, which was removed with Entra SSO (`0010`).
+> Such an install must first be brought to `0005` with a build from before
+> `0010`, then upgraded normally. On `0010`, legacy accounts are linked to
+> their Entra identity by address on first SSO sign-in.
 
 **Do this once, and read it before running `alembic upgrade head`.** The usual
 "migrate, then restart" order breaks this particular upgrade in two ways:

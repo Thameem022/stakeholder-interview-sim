@@ -223,14 +223,12 @@ export interface AuthUser {
 export class AuthError extends Error {
   code: string
   status: number
-  failed: string[]
 
-  constructor(message: string, code: string, status: number, failed: string[] = []) {
+  constructor(message: string, code: string, status: number) {
     super(message)
     this.name = 'AuthError'
     this.code = code
     this.status = status
-    this.failed = failed
   }
 }
 
@@ -239,7 +237,7 @@ const asAuthError = (error: unknown): AuthError => {
     const status = error.response?.status ?? 0
     const detail = error.response?.data?.detail
     if (detail && typeof detail === 'object') {
-      return new AuthError(detail.message, detail.code, status, detail.failed ?? [])
+      return new AuthError(detail.message, detail.code, status)
     }
     if (status === 0) {
       return new AuthError("Can't reach the server. Check your connection.", 'network', 0)
@@ -257,22 +255,13 @@ const authPost = async <T>(path: string, body: unknown): Promise<T> => {
   }
 }
 
-export const registerAccount = (firstName: string, lastName: string, email: string) =>
-  authPost<{ status: string }>('/api/auth/register', {
-    first_name: firstName,
-    last_name: lastName,
-    email,
-  })
-
-export const setPassword = (email: string, tempPassword: string, newPassword: string) =>
-  authPost<AuthUser>('/api/auth/set-password', {
-    email,
-    temp_password: tempPassword,
-    new_password: newPassword,
-  })
-
-export const login = (email: string, password: string, remember: boolean) =>
-  authPost<AuthUser>('/api/auth/login', { email, password, remember })
+/**
+ * Where the browser goes to sign in. Sign-in is WPI single sign-on (Entra ID)
+ * only: this is a full-page navigation to the backend, which redirects on to
+ * Microsoft and back. `returnTo` must be a path on this site.
+ */
+export const signInUrl = (returnTo = '/') =>
+  `/api/auth/login?return_to=${encodeURIComponent(returnTo)}`
 
 export const logout = () => authPost<{ status: string }>('/api/auth/logout', {})
 

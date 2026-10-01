@@ -14,8 +14,8 @@ from app.config import Settings, get_settings
 from app.realtime.notice import NOTICE_VERSION
 from app.research import consent as consent_mod
 from app.research.consent import CONSENT_VERSION
-from tests.conftest import register, set_password, sign_in_as
-from tests.db import _dsn, grant_role, participant_of, scalar, sql
+from tests.conftest import enroll, sign_in_as
+from tests.db import _dsn, participant_of, scalar, sql
 from tests.test_audit import audit_log  # noqa: F401  (fixture)
 
 # --- helpers -----------------------------------------------------------------
@@ -29,14 +29,7 @@ def research_on(monkeypatch):
 @pytest.fixture
 def make_user(client):
     def _make(*roles: str) -> tuple[str, str]:
-        email = f"sis-test-{uuid.uuid4().hex[:12]}@wpi.edu"
-        register(client, email)
-        r = set_password(client, email)
-        assert r.status_code == 200, r.text
-        user_id = r.json()["id"]
-        for role in roles:
-            grant_role(user_id, role)
-        return email, user_id
+        return enroll(client, *roles)
 
     return _make
 

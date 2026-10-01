@@ -13,7 +13,7 @@ import pytest
 
 from app.config import settings
 from app.realtime.notice import NOTICE_VERSION
-from tests.conftest import GOOD_PASSWORD, register, set_password, sign_in_as
+from tests.conftest import enroll, sign_in_as
 from tests.db import participant_of, scalar, sql
 
 # (method, path, json) for every route that must require a session.
@@ -86,11 +86,7 @@ def two_users(client, logged_in_client):
     _, user_a = logged_in_client
     cookie_a = client.cookies.get(settings.auth_cookie_name)
 
-    email_b = f"sis-test-{uuid.uuid4().hex[:12]}@wpi.edu"
-    register(client, email_b)
-    r = set_password(client, email_b)
-    assert r.status_code == 200, r.text
-    user_b = r.json()["id"]
+    email_b, user_b = enroll(client)
 
     # Leave the client signed in as A.
     client.cookies.clear()
@@ -109,7 +105,7 @@ def test_another_users_evaluation_is_not_readable(two_users, owned_session):
 
     assert client.get(f"/api/eval/sessions/{sid}/latest").status_code == 200
 
-    sign_in_as(client, email_b, GOOD_PASSWORD)
+    sign_in_as(client, email_b)
     r = client.get(f"/api/eval/sessions/{sid}/latest")
     # 404 rather than 403 on purpose: a 403 would confirm the id names a real
     # session. It also keeps 401 meaning only "your session is gone", which is
@@ -121,7 +117,7 @@ def test_another_users_session_cannot_be_scored(two_users, owned_session):
     client, user_a, email_b, _ = two_users
     sid = owned_session(user_a, transcript='[{"role":"user","text":"hi","timestamp":"t"}]')
 
-    sign_in_as(client, email_b, GOOD_PASSWORD)
+    sign_in_as(client, email_b)
     r = client.post(f"/api/eval/iqr?session_id={sid}")
     # Rejected before any scorer runs, so this never reaches OpenAI.
     assert r.status_code == 404
@@ -135,7 +131,7 @@ def test_another_users_transcript_cannot_be_appended_to(two_users, owned_session
     original = '[{"role": "user", "text": "mine", "timestamp": "2026-01-01T00:00:00Z"}]'
     sid = owned_session(user_a, transcript=original)
 
-    sign_in_as(client, email_b, GOOD_PASSWORD)
+    sign_in_as(client, email_b)
     r = client.post(
         "/api/realtime/transcript",
         json={"session_id": str(sid), "role": "user", "text": "injected"},
@@ -207,7 +203,7 @@ def test_token_mint_cannot_target_an_existing_session(
     original = '[{"role": "user", "text": "mine", "timestamp": "2026-01-01T00:00:00Z"}]'
     sid = owned_session(user_a, transcript=original)
 
-    sign_in_as(client, email_b, GOOD_PASSWORD)
+    sign_in_as(client, email_b)
     r = client.post(
         "/api/realtime/token",
         json={

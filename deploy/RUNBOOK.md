@@ -136,25 +136,23 @@ recorded since that backup was taken.
 
 ## Roles in SES
 
-Application roles are granted by the Support Owner on the server, never over
-HTTP, and every change is audited:
+Roles come from **Entra ID app-role assignments** and are re-synced from the
+token at every sign-in. Granting or removing a role is an Entra change (the
+enterprise application's *Users and groups*), never a database edit, and takes
+effect at the person's next sign-in. Every sign-in records the roles it
+carried in the audit log (`auth.login`, `roles`).
 
-```bash
-cd /opt/stakeholder-engagement-simulator/backend
-sudo -u mohammedthameem uv run python -m scripts.grant_role \
-  --email someone@wpi.edu --role support_owner \
-  --authorized-by "Name, approval reference"
-```
+| Entra app role | SES role | Grants |
+|---|---|---|
+| `Student` | (student) | Use the simulator. Every user needs at least one role. |
+| `Instructor` | `instructor` | Flag any session. |
+| `StudyPersonnel` | `study_personnel` | Read and export consented research data. Only the IRB's approved study personnel. |
+| `ExportApprover` | `export_approver` | Record a named, single-use, expiring approval for a research export. The approver cannot also be the exporter. |
+| `SupportOwner` | `support_owner` | Review flags and purge sessions. |
 
-| Role | Grants |
-|---|---|
-| `instructor` | Flag any session. |
-| `study_personnel` | Read and export consented research data. Only the IRB's approved study personnel. |
-| `export_approver` | Record a named, single-use, expiring approval for a research export. The approver cannot also be the exporter. |
-| `support_owner` | Review flags and purge sessions. |
-
-Remove roles at term end (`--revoke`). Once sign-in moves to Entra ID, these
-come from Entra app-role assignments instead.
+To revoke access urgently (a compromised account), remove the assignment in
+Entra **and** end the person's current SES sessions:
+`DELETE FROM identity.auth_sessions WHERE user_id = '<account id>';`
 
 ---
 
@@ -165,8 +163,8 @@ come from Entra app-role assignments instead.
    outside SES). Run a `--dry-run` and check the counts look right.
 2. Close or purge any open flags. Sessions under an open flag are held back
    from deletion.
-3. Revoke app roles that should not carry into the next term
-   (`scripts/grant_role.py --revoke`). Staff accounts are not deleted by the
+3. Remove the term's Entra assignments (roster group, and staff roles that
+   should not carry into the next term). Staff accounts are not deleted by the
    job.
 4. After the grace period, confirm the run in `deletion_log` shows the course
    data deleted, and that backups older than the cutoff have rotated out.
