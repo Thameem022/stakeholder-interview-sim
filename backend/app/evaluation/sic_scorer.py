@@ -8,7 +8,9 @@ from typing import Dict, List, Literal, Optional, Tuple
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
+
+from app.evaluation.untrusted import UNTRUSTED_TRANSCRIPT_NOTICE, neutralize_turn_text
 
 logger = logging.getLogger(__name__)
 
@@ -232,7 +234,7 @@ def _build_llm(model: str = "gpt-4o", temperature: float = 0.0) -> ChatOpenAI:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY environment variable is required for SIC scoring.")
-    return ChatOpenAI(model=model, temperature=temperature, api_key=api_key)
+    return ChatOpenAI(model=model, temperature=temperature, api_key=SecretStr(api_key))
 
 
 class SICScorer:
@@ -392,14 +394,16 @@ class SICScorer:
         lines = []
         for t in turns:
             speaker = t.get("speaker") or t.get("role", "Unknown")
-            text = (t.get("text") or "").strip()
+            # Neutralised so a turn cannot break out of the fence or forge a
+            # line attributed to another speaker.
+            text = neutralize_turn_text((t.get("text") or "").strip()).strip()
             if text:
                 lines.append(f"[{speaker}]: {text}")
         return "\n".join(lines)
 
     def _build_chain(self, llm):
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "{system_prompt}"),
+            ("system", "{system_prompt}\n\n{injection_notice}"),
             (
                 "user",
                 "Grade the following interview transcript against the SIC catalog.\n\n"
@@ -450,6 +454,7 @@ class SICScorer:
         )
         chain_input = {
             "system_prompt": self._system_prompt,
+            "injection_notice": UNTRUSTED_TRANSCRIPT_NOTICE,
             "transcript": self._format_transcript(turns),
             "rubric": rubric_text,
         }
@@ -546,9 +551,11 @@ class SICScorer:
                 # theirs — the panel reads fine without a quote.
                 evidence_quote = grade.evidence_quote if grade.elicited else ""
                 if evidence_quote and not _quote_is_the_students(evidence_quote, student_blob):
+                    # Length, not content: the quote is interview text, and
+                    # transcript content stays out of the logs.
                     logger.warning(
-                        "SIC evidence_quote for %s is not from a student turn; dropping it: %r",
-                        item["chunk_id"], evidence_quote[:80],
+                        "SIC evidence_quote for %s is not from a student turn; dropping it (%d chars)",
+                        item["chunk_id"], len(evidence_quote),
                     )
                     evidence_quote = ""
 
@@ -650,6 +657,6 @@ class SICScorer:
                 for tc in tier_coverages:
                     tc["consequence_text"] = consequence_map.get(tc["tier"], "")
         except Exception as e:
-            logger.warning("SIC enrichment skipped (%s); returning base coverage.", e)
+            logger.warning("SIC enrichment skipped (%s); returning base coverage.", type(e).__name__)
 
         return tier_coverages

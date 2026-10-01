@@ -16,7 +16,7 @@ from typing import Annotated, Any, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.auth.dependencies import CurrentUser, rate_limited, require_user
 from app.db import get_pool
@@ -37,9 +37,16 @@ _RETRIEVE_LIMIT = ("realtime-retrieve", 300, 3600)
 _TRANSCRIPT_LIMIT = ("realtime-transcript", 600, 3600)
 
 
+# A search query is a short phrase. Anything longer is the model being steered
+# into pasting the conversation (or something worse) into the lookup.
+_MAX_QUERY_CHARS = 500
+
+
 class RetrieveRequest(BaseModel):
-    persona_id: str
-    query: str
+    # These are the model's tool-call arguments, and the model is steered by
+    # whatever the student says — so they are validated like any user input.
+    persona_id: str = Field(pattern=r"^[a-z0-9_]{1,64}$")
+    query: str = Field(min_length=1, max_length=_MAX_QUERY_CHARS)
     # Required: retrieval is only meaningful inside the caller's own interview,
     # and the session is what ties the call (and its telemetry) to that owner.
     session_id: str
@@ -168,14 +175,14 @@ async def retrieve_context(
     try:
         query_vec = await embed_one(req.query)
     except Exception as e:
-        logger.warning(f"retrieve embed failed: {e}")
+        logger.warning("retrieve embed failed: %s", type(e).__name__)
         elapsed = (perf_counter() - started) * 1000
         _record_retrieval_event(
             session_id=sid, persona_id=req.persona_id, query=req.query,
             embed_ms=elapsed, search_ms=None, total_ms=elapsed,
             persona_top_scores=[], world_top_scores=[],
             persona_chunk_ids=[], world_chunk_ids=[],
-            k_persona=k_persona, k_world=k_world, error=f"embed: {e}",
+            k_persona=k_persona, k_world=k_world, error=f"embed: {type(e).__name__}",
         )
         return RetrieveResponse(text=_format_context([], []))
 
@@ -190,17 +197,19 @@ async def retrieve_context(
     search_ms = (perf_counter() - search_started) * 1000
 
     errors: list[str] = []
-    if isinstance(results[0], Exception):
-        logger.warning(f"persona retrieval failed: {results[0]}")
-        errors.append(f"persona: {results[0]}")
-        persona_chunks = []
+    # Exception type only, in the log and in telemetry: the query is derived
+    # from what the student said, and an error message may echo it back.
+    persona_chunks: list[dict[str, Any]] = []
+    world_chunks: list[dict[str, Any]] = []
+    if isinstance(results[0], BaseException):
+        logger.warning("persona retrieval failed: %s", type(results[0]).__name__)
+        errors.append(f"persona: {type(results[0]).__name__}")
     else:
         persona_chunks = results[0]
 
-    if isinstance(results[1], Exception):
-        logger.warning(f"world retrieval failed: {results[1]}")
-        errors.append(f"world: {results[1]}")
-        world_chunks = []
+    if isinstance(results[1], BaseException):
+        logger.warning("world retrieval failed: %s", type(results[1]).__name__)
+        errors.append(f"world: {type(results[1]).__name__}")
     else:
         world_chunks = results[1]
 

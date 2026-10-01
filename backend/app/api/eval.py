@@ -17,6 +17,8 @@ from app.auth.dependencies import (
     require_user,
 )
 from app.db import get_pool
+from app.evaluation.sic_scorer import _quote_is_the_students, _student_turn_blob
+from app.evaluation.untrusted import INJECTION_GUARD_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -148,12 +150,35 @@ def _reconcile_moments_with_coverage(payload: dict[str, Any]) -> None:
         moment["out_of_reach_state"] = state
 
 
+def _drop_moments_with_unverified_quotes(payload: dict[str, Any], turns: list[dict]) -> None:
+    """Remove any moment whose student_quote the student never said.
+
+    A moment is built around "you said X" — so a quote that is not in a student
+    turn is a fabrication, whether the judge hallucinated it or was talked into
+    it by text in the transcript. SIC already drops such quotes; a moment
+    without its quote has nothing left to stand on, so the whole moment goes.
+    """
+    blob = _student_turn_blob(turns)
+    kept = []
+    for moment in payload.get("moments") or []:
+        if _quote_is_the_students(moment.get("student_quote") or "", blob):
+            kept.append(moment)
+        else:
+            # Count only: the quote itself is interview text.
+            logger.warning(
+                "IQR moment quote not found in student turns; dropping moment (dimension=%s)",
+                moment.get("dimension"),
+            )
+    payload["moments"] = kept
+
+
 SCORER_METADATA = {
     "iqr_model": "gpt-4o",
     "iqr_fallback_model": "gpt-4o-mini",
     "sic_model": "gpt-4o",
     "sic_fallback_model": "gpt-4o-mini",
     "scorer_version": "1.0",
+    "injection_guard_version": INJECTION_GUARD_VERSION,
     # Set by the deployment (see deploy/). "unknown" locally, which is honest:
     # a row that cannot name the code that produced it should say so.
     "git_sha": os.getenv("GIT_SHA", "unknown"),
@@ -259,9 +284,14 @@ async def eval_iqr(session_id: UUID, user: Annotated[CurrentUser, Depends(requir
         return_exceptions=True,
     )
 
-    if isinstance(iqr_result, Exception):
-        logger.exception(f"IQR scoring failed for session {session_id}: {iqr_result}")
-        raise HTTPException(status_code=500, detail=f"IQR scoring failed: {iqr_result}")
+    # Exception *type* only, in the log and in the response. A scorer failure
+    # (an output-parsing error especially) carries the model's raw output in
+    # its message, and that output quotes the interview.
+    if isinstance(iqr_result, BaseException):
+        logger.error(
+            "IQR scoring failed for session %s: %s", session_id, type(iqr_result).__name__
+        )
+        raise HTTPException(status_code=500, detail="IQR scoring failed. Please try again.")
 
     payload = iqr_result.model_dump()
 
@@ -273,16 +303,19 @@ async def eval_iqr(session_id: UUID, user: Annotated[CurrentUser, Depends(requir
         for t in iqr_transcript.turns
     ]
 
-    if isinstance(sic_result, Exception):
-        logger.warning(f"SIC scoring failed for session {session_id}: {sic_result}")
+    if isinstance(sic_result, BaseException):
+        logger.warning(
+            "SIC scoring failed for session %s: %s", session_id, type(sic_result).__name__
+        )
         payload["insight_coverage"] = []
-        payload["sic_error"] = str(sic_result)
+        payload["sic_error"] = type(sic_result).__name__
     else:
         payload["insight_coverage"] = sic_result if isinstance(sic_result, list) else []
 
     # Both halves are in: settle what the moments claim against what coverage
     # actually graded, then fix displayed proper nouns. Order matters — the
     # reconciliation matches on labels, which normalisation must not touch.
+    _drop_moments_with_unverified_quotes(payload, turns)
     _reconcile_moments_with_coverage(payload)
     _normalize_payload_for_display(payload)
 

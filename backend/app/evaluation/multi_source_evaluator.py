@@ -54,7 +54,7 @@ def _normalize_world_chunks(retrieved_world_chunks: Sequence[Any]) -> List[Dict[
     for c in retrieved_world_chunks or []:
         if isinstance(c, str):
             txt = c.strip()
-            rec = {
+            rec: Dict[str, Any] = {
                 "id": None,
                 "text": txt,
                 "metadata": {},

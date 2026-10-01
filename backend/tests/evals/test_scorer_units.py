@@ -22,8 +22,8 @@ from app.api.eval import (
     sanitize_transcript,
 )
 from app.evaluation.iqr_scorer import (
-    IQR_DIMENSION_WEIGHTS,
     DEFAULT_PROMPT_PATH,
+    IQR_DIMENSION_WEIGHTS,
     compute_overall_score,
     convert_transcript_to_iqr,
 )

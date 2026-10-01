@@ -66,6 +66,8 @@ line-length = 120
 select = ["E", "F", "I", "W"]
 
 [tool.ruff.lint.per-file-ignores]
+# Deliberate: mimetypes and logging are configured before the app imports.
+"app/main.py" = ["E402"]
 "app/evaluation/iqr_scorer.py" = ["E501", "I001"]
 "app/evaluation/iqr_schema.py" = ["E501", "I001"]
 "app/evaluation/sic_scorer.py" = ["E501", "I001", "F841"]
@@ -74,9 +76,19 @@ select = ["E", "F", "I", "W"]
 "scripts/*.py" = ["E501", "I001", "F401", "F841", "W293", "W292"]
 "evals/**/*.py" = ["E501", "I001"]
 
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+files = ["app"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "llm: hits the OpenAI API and costs money; skipped unless RUN_LLM_EVALS=1",
 ]
+
+[tool.uv]
+# langsmith >= 0.9 depends on httpx2, whose current releases carry open
+# advisories; 0.8.18 is the patched release of the line this app was built on.
+constraint-dependencies = ["langsmith>=0.8.18,<0.9"]

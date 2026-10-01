@@ -6,15 +6,21 @@ import os
 from pathlib import Path
 from typing import Optional
 
-logger = logging.getLogger(__name__)
-
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
+from pydantic import SecretStr
 
 from app.evaluation.iqr_schema import SessionEvaluation, Transcript
+from app.evaluation.untrusted import (
+    INJECTION_GUARD_VERSION,
+    UNTRUSTED_TRANSCRIPT_NOTICE,
+    neutralize_turn_text,
+)
 from app.personas.prompt_assembly import _load_persona_config
+
+logger = logging.getLogger(__name__)
 
 # Default prompt path — evaluator system prompts (versioned; bump version here to upgrade)
 DEFAULT_PROMPT_PATH = Path(__file__).parent / "prompts" / "iqr" / "v3" / "system_prompt.txt"
@@ -164,11 +170,23 @@ def _build_do_not_recommend_block(sic_key: dict) -> str:
     ])
 
 
+def _transcript_json_for_prompt(transcript: Transcript) -> str:
+    """The transcript as the judge sees it: JSON, with each turn neutralised.
+
+    A copy, so the caller's transcript (and what the report displays) is
+    untouched.
+    """
+    safe = transcript.model_copy(deep=True)
+    for turn in safe.turns:
+        turn.text = neutralize_turn_text(turn.text)
+    return json.dumps(safe.model_dump(), ensure_ascii=False, indent=2)
+
+
 def _build_llm(model: str = "gpt-4o", temperature: float = 0.0) -> BaseChatModel:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY environment variable is required for IQR scoring.")
-    return ChatOpenAI(model=model, temperature=temperature, api_key=api_key)
+    return ChatOpenAI(model=model, temperature=temperature, api_key=SecretStr(api_key))
 
 
 class IQRScorer:
@@ -214,7 +232,7 @@ class IQRScorer:
             [
                 (
                     "system",
-                    "{system_prompt}\n\n{persona_header}\n\n{persona_rapport_anchors}\n\n{motifs_context}\n\n"
+                    "{system_prompt}\n\n{injection_notice}\n\n{persona_header}\n\n{persona_rapport_anchors}\n\n{motifs_context}\n\n"
                     "{catalogue_items}\n\n{do_not_recommend}\n\n{format_instructions}",
                 ),
                 (
@@ -249,7 +267,7 @@ class IQRScorer:
         for key in ("session_id", "persona_id", "scenario_id"):
             base_metadata.setdefault(key, base_metadata.get(key))
 
-        transcript_json = json.dumps(transcript.model_dump(), ensure_ascii=False, indent=2)
+        transcript_json = _transcript_json_for_prompt(transcript)
 
         persona_id: str = str(base_metadata.get("persona_key") or base_metadata.get("persona_id") or "")
         sic_key = _read_sic_key(persona_id)
@@ -268,6 +286,7 @@ class IQRScorer:
 
         chain_input = {
             "system_prompt": self._system_prompt,
+            "injection_notice": UNTRUSTED_TRANSCRIPT_NOTICE,
             "persona_header": _build_persona_header(sic_key),
             "persona_rapport_anchors": persona_rapport_anchors,
             "motifs_context": motifs_context,
@@ -302,6 +321,7 @@ class IQRScorer:
             "judge_model": self.last_model_used,
             "prompt_version": self.prompt_version,
             "iqr_weights_version": IQR_WEIGHTS_VERSION,
+            "injection_guard_version": INJECTION_GUARD_VERSION,
         }
         return result
 

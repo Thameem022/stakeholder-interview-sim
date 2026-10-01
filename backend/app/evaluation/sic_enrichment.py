@@ -5,7 +5,7 @@ import os
 from typing import Dict, List, Optional
 
 from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 logger = logging.getLogger(__name__)
 
@@ -125,14 +125,20 @@ async def enrich_sic_results(
         llm = ChatOpenAI(
             model="gpt-4o-mini",
             temperature=0.2,
-            api_key=api_key,
+            api_key=SecretStr(api_key),
         )
         structured_llm = llm.with_structured_output(SICEnrichmentResult)
         result = await structured_llm.ainvoke([
             {"role": "system", "content": _ENRICHMENT_SYSTEM_PROMPT},
             {"role": "user", "content": user_message},
         ])
-        return result
-    except Exception:
-        logger.exception("SIC enrichment LLM call failed; proceeding without consequence text")
+        # Validate rather than trust the structured-output wrapper's shape.
+        return SICEnrichmentResult.model_validate(result)
+    except Exception as e:
+        # Type only: the exception text can carry the model's output, which
+        # quotes the interview. Transcript content stays out of the logs.
+        logger.warning(
+            "SIC enrichment LLM call failed (%s); proceeding without consequence text",
+            type(e).__name__,
+        )
         return None

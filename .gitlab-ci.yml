@@ -1,0 +1,130 @@
+# Continuous integration for the Stakeholder Engagement Simulator.
+#
+# Evidence for SR-2026-052 item 1.5 [SEC-SDLC-001]: every change is linted,
+# type-checked and tested; dependencies are scanned and the pipeline FAILS on
+# High/Critical findings; a CycloneDX SBOM is produced for backend + frontend.
+#
+# Nothing here needs a secret. The database is a throwaway service container
+# whose credentials exist only inside the job; the test suite never calls a
+# model provider.
+
+stages:
+  - lint
+  - test
+  - security
+  - sbom
+
+variables:
+  UV_IMAGE: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+  NODE_IMAGE: node:20-bookworm-slim
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
+  npm_config_cache: "$CI_PROJECT_DIR/.cache/npm"
+  # Pinned so a scanner release cannot silently change what "clean" means.
+  PIP_AUDIT_VERSION: "2.10.1"
+  CYCLONEDX_PY_VERSION: "7.5.0"
+  CYCLONEDX_NPM_VERSION: "6.0.1"
+
+.backend:
+  image: $UV_IMAGE
+  before_script:
+    - cd backend
+  cache:
+    key:
+      files: [backend/uv.lock]
+    paths: [.cache/uv]
+
+.frontend:
+  image: $NODE_IMAGE
+  before_script:
+    - cd frontend
+    - npm ci --no-audit --no-fund
+  cache:
+    key:
+      files: [frontend/package-lock.json]
+    paths: [.cache/npm]
+
+# --- lint -------------------------------------------------------------------
+
+backend-lint:
+  extends: .backend
+  stage: lint
+  script:
+    - uv sync --frozen --group evals
+    - uv run ruff check app tests evals scripts
+    - uv run mypy
+
+frontend-typecheck-build:
+  extends: .frontend
+  stage: lint
+  script:
+    # `build` is `tsc && vite build`: a type error fails the job.
+    - npm run build
+
+# --- test -------------------------------------------------------------------
+
+backend-test:
+  extends: .backend
+  stage: test
+  services:
+    - name: pgvector/pgvector:pg16
+      alias: postgres
+  variables:
+    POSTGRES_DB: sis
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+    DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/sis
+    ENVIRONMENT: dev
+  script:
+    - uv sync --frozen --group evals
+    - uv run alembic upgrade head
+    - uv run pytest -q --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: backend/report.xml
+
+# --- security: dependency scanning ------------------------------------------
+
+backend-dependency-audit:
+  extends: .backend
+  stage: security
+  script:
+    # Every dependency group, not just runtime: dev and analysis tooling runs
+    # in this pipeline and on developer machines too.
+    - uv export --frozen --all-groups --no-hashes --no-emit-project -o requirements-audit.txt
+    # pip-audit reports no severity, so it fails on ANY known vulnerability —
+    # stricter than the High/Critical bar. A finding that is assessed and
+    # accepted must be recorded with `--ignore-vuln <ID>` and a reason here.
+    - uvx "pip-audit==$PIP_AUDIT_VERSION" -r requirements-audit.txt --no-deps --disable-pip --strict
+
+frontend-dependency-audit:
+  extends: .frontend
+  stage: security
+  script:
+    # Fails on High or Critical, across runtime and build dependencies.
+    - npm audit --audit-level=high
+
+# --- SBOM -------------------------------------------------------------------
+
+sbom-backend:
+  extends: .backend
+  stage: sbom
+  script:
+    # Runtime dependencies only — what ships.
+    - uv sync --frozen --no-dev
+    - uvx --from "cyclonedx-bom==$CYCLONEDX_PY_VERSION" cyclonedx-py environment .venv
+        --output-format JSON --output-file sbom-backend.cdx.json
+  artifacts:
+    paths: [backend/sbom-backend.cdx.json]
+    expire_in: 1 year
+
+sbom-frontend:
+  extends: .frontend
+  stage: sbom
+  script:
+    # Production dependencies — the built bundle's contents.
+    - npx --yes "@cyclonedx/cyclonedx-npm@$CYCLONEDX_NPM_VERSION" --omit dev
+        --output-format JSON --output-file sbom-frontend.cdx.json
+  artifacts:
+    paths: [frontend/sbom-frontend.cdx.json]
+    expire_in: 1 year
