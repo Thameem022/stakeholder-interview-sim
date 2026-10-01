@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     # echoes it back in X-CSRF-Token, which a cross-site form cannot do.
     auth_csrf_cookie_name: str = "sis_csrf"
 
+    # Security audit events (JSON lines on the "ses.audit" logger). "stdout"
+    # lands in the service journal; "syslog" sends to AUDIT_SYSLOG_ADDRESS (a
+    # socket path, or host:port for a forwarder); "none" disables them.
+    audit_log_sink: str = "stdout"
+    audit_syslog_address: str = "/dev/log"
+
     # Auth
     auth_email_domain: str = "wpi.edu"
     auth_cookie_name: str = "sis_session"

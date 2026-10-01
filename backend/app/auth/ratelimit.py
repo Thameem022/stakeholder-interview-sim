@@ -7,6 +7,8 @@ the kind of regression nobody notices until it matters.
 
 from __future__ import annotations
 
+from uuid import UUID
+
 import asyncpg
 from fastapi import HTTPException, Request, status
 
@@ -25,6 +27,23 @@ def client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+def _audit_rate_limited(bucket: str) -> None:
+    # Imported here: the audit module uses client_ip from this one.
+    from app.observability.audit import audit
+
+    # Buckets are "<action>:<scope>:<value>". The value is an address or an IP
+    # for the auth endpoints, so only a user id is passed through as-is.
+    action, _, rest = bucket.partition(":")
+    scope, _, value = rest.partition(":")
+    actor = None
+    if scope == "user":
+        try:
+            actor = UUID(value)
+        except ValueError:
+            pass
+    audit("auth.rate_limited", "denied", actor_user_id=actor, action=action, scope=scope)
+
+
 async def enforce(
     conn: asyncpg.Connection, bucket: str, limit: int, window_seconds: int
 ) -> None:
@@ -39,6 +58,7 @@ async def enforce(
         float(window_seconds),
     )
     if used >= limit:
+        _audit_rate_limited(bucket)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail={

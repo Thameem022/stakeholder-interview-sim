@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 from app.config import settings
+from app.observability.audit import audit
 
 CSRF_HEADER = "X-CSRF-Token"
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
@@ -46,6 +47,13 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         if request.method not in SAFE_METHODS and request.url.path.startswith("/api/"):
             header = request.headers.get(CSRF_HEADER)
             if not cookie or not header or not secrets.compare_digest(cookie, header):
+                audit(
+                    "auth.csrf_rejected",
+                    "denied",
+                    request=request,
+                    reason="missing" if not (cookie and header) else "mismatch",
+                    origin=request.headers.get("origin"),
+                )
                 return _rejection()
 
         response = await call_next(request)

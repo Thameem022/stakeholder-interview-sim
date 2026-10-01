@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, NoReturn
 from uuid import UUID
 
 from fastapi import Depends, Request, status
@@ -20,6 +20,7 @@ from app.auth.ratelimit import enforce
 from app.auth.sessions import load_session_user, touch_session
 from app.config import settings
 from app.db import get_pool
+from app.observability.audit import audit, participant_id_for
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,8 @@ async def require_user(request: Request) -> CurrentUser:
     async with pool.acquire() as conn:
         row = await load_session_user(conn, token)
         if row is None:
+            # A cookie that names no live session: expired, revoked, or forged.
+            audit("auth.session_rejected", "denied", request=request)
             raise auth_error(
                 status.HTTP_401_UNAUTHORIZED, "not_authenticated", "Not signed in."
             )
@@ -87,7 +90,7 @@ def rate_limited(action: str, limit: int, window_seconds: int):
     return _dep
 
 
-def deny_session_access(session_id: UUID, requester: UUID, owner: UUID | None) -> None:
+def deny_session_access(session_id: UUID, requester: UUID, owner: UUID | None) -> NoReturn:
     """Log an ownership denial, then raise the same 404 as 'does not exist'.
 
     The response must not distinguish "someone else's" from "no such session" —
@@ -96,6 +99,13 @@ def deny_session_access(session_id: UUID, requester: UUID, owner: UUID | None) -
     place a probing attempt would ever show up.
     """
     if owner is not None:
+        audit(
+            "authz.session_access",
+            "denied",
+            actor_user_id=requester,
+            session_id=session_id,
+            owner_participant_id=participant_id_for(owner),
+        )
         logger.warning(
             "ownership denied: session=%s owner=%s requester=%s",
             session_id,

@@ -18,8 +18,15 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.auth.dependencies import CurrentUser, rate_limited, require_user
+from app.auth.dependencies import (
+    CurrentUser,
+    deny_session_access,
+    rate_limited,
+    require_user,
+)
+from app.config import settings
 from app.db import get_pool
+from app.observability.audit import audit
 from app.realtime.session import InterviewSession
 from app.vector_store import embed_one, search_persona, search_world
 
@@ -165,7 +172,7 @@ async def retrieve_context(
     # row attributed to that session. Same 404 as "does not exist".
     session = await InterviewSession.load(sid, user.id)
     if session is None:
-        raise HTTPException(status_code=404, detail="session not found")
+        deny_session_access(sid, user.id, await InterviewSession.owner_of(sid))
     if session.persona_id != req.persona_id:
         raise HTTPException(status_code=400, detail="persona_id does not match session")
 
@@ -183,6 +190,12 @@ async def retrieve_context(
             persona_top_scores=[], world_top_scores=[],
             persona_chunk_ids=[], world_chunk_ids=[],
             k_persona=k_persona, k_world=k_world, error=f"embed: {type(e).__name__}",
+        )
+        audit(
+            "ai.retrieve", "failure", actor_user_id=user.id,
+            session_id=sid, persona_id=req.persona_id,
+            embedding_model=settings.embedding_model, latency_ms=round(elapsed),
+            error_type=type(e).__name__,
         )
         return RetrieveResponse(text=_format_context([], []))
 
@@ -223,6 +236,16 @@ async def retrieve_context(
         error="; ".join(errors) or None,
     )
 
+    # Metadata only — the query is what the student asked, so it stays out.
+    audit(
+        "ai.retrieve", "failure" if errors else "success", actor_user_id=user.id,
+        session_id=sid, persona_id=req.persona_id,
+        embedding_model=settings.embedding_model,
+        latency_ms=round((perf_counter() - started) * 1000),
+        persona_hits=len(persona_chunks), world_hits=len(world_chunks),
+        error_type=[e.split(": ", 1)[-1] for e in errors] or None,
+    )
+
     text = _format_context(persona_chunks, world_chunks)
     return RetrieveResponse(text=text)
 
@@ -244,7 +267,7 @@ async def append_transcript(
     # the write itself, which is what makes the gap between here and there safe.
     session = await InterviewSession.load(sid, user.id)
     if session is None:
-        raise HTTPException(status_code=404, detail="session not found")
+        deny_session_access(sid, user.id, await InterviewSession.owner_of(sid))
 
     text = req.text.strip()
     if text:

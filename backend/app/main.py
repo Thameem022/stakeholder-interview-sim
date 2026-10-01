@@ -31,8 +31,11 @@ from app.auth.csrf import CSRF_HEADER, CSRFMiddleware
 from app.auth.dependencies import require_user
 from app.config import settings
 from app.db import close_pool, init_pool
+from app.observability.audit import configure_audit_logging
 from app.realtime.retrieve import router as realtime_retrieve_router
 from app.realtime.token import router as realtime_token_router
+
+configure_audit_logging()
 
 
 @asynccontextmanager

@@ -92,6 +92,19 @@ class InterviewSession:
                 status.HTTP_404_NOT_FOUND, "session_not_found", "Session not found."
             )
 
+    @staticmethod
+    async def owner_of(session_id: UUID) -> Optional[UUID]:
+        """Who owns a session, or None if it does not exist.
+
+        Only for telling "someone else's" apart from "absent" in the audit
+        trail after a failed load — the response is the same 404 either way.
+        """
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            return await conn.fetchval(
+                "SELECT user_id FROM interview_sessions WHERE id = $1", session_id
+            )
+
     @classmethod
     async def load(
         cls, session_id: UUID, user_id: UUID

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from time import perf_counter
 from typing import Annotated, Any, Dict, Optional
 from uuid import uuid4
 
@@ -21,6 +22,7 @@ from pydantic import BaseModel
 
 from app.auth.dependencies import CurrentUser, rate_limited, require_user
 from app.config import settings
+from app.observability.audit import audit
 from app.personas.prompt_assembly import build_persona_system_prompt
 from app.personas.voices import VOICE_MAP
 from app.realtime.session import InterviewSession
@@ -147,6 +149,15 @@ async def mint_token(
     )
     await session.create()
 
+    def _audit_mint(outcome, **fields) -> None:
+        audit(
+            "ai.realtime_session", outcome, actor_user_id=user.id,
+            session_id=sid, persona_id=req.persona_id, voice_id=voice_id,
+            model=settings.openai_realtime_model,
+            latency_ms=round((perf_counter() - started) * 1000), **fields,
+        )
+
+    started = perf_counter()
     async with httpx.AsyncClient(timeout=15.0) as client:
         try:
             resp = await client.post(
@@ -159,9 +170,11 @@ async def mint_token(
             )
         except httpx.HTTPError as e:
             logger.exception(f"openai client_secrets transport error: {e}")
+            _audit_mint("failure", error_type=type(e).__name__)
             raise HTTPException(status_code=502, detail=f"openai transport error: {e}")
 
     if resp.status_code >= 400:
+        _audit_mint("failure", provider_status=resp.status_code)
         logger.error(
             f"openai client_secrets {resp.status_code}: {resp.text[:400]}"
         )
@@ -173,9 +186,11 @@ async def mint_token(
     data = resp.json()
     ephemeral_key = data.get("value")
     if not ephemeral_key:
+        _audit_mint("failure", error_type="missing_ephemeral_key")
         logger.error(f"openai client_secrets missing 'value': {data}")
         raise HTTPException(status_code=502, detail="openai response missing ephemeral key")
 
+    _audit_mint("success")
     logger.info(
         f"minted ephemeral key for session={sid} persona={req.persona_id} user={user.id}"
     )

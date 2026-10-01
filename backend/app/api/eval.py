@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+from time import perf_counter
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -19,6 +20,7 @@ from app.auth.dependencies import (
 from app.db import get_pool
 from app.evaluation.sic_scorer import _quote_is_the_students, _student_turn_blob
 from app.evaluation.untrusted import INJECTION_GUARD_VERSION
+from app.observability.audit import Outcome, audit
 
 logger = logging.getLogger(__name__)
 
@@ -278,10 +280,31 @@ async def eval_iqr(session_id: UUID, user: Annotated[CurrentUser, Depends(requir
     iqr_scorer = IQRScorer()
     sic_scorer = SICScorer()
 
+    started = perf_counter()
     iqr_result, sic_result = await asyncio.gather(
         iqr_scorer.evaluate(iqr_transcript),
         sic_scorer.evaluate(persona_id, turns),
         return_exceptions=True,
+    )
+
+    # Which models graded this run, with which prompts, and whether it worked.
+    # Turn counts, never turn text.
+    audit(
+        "ai.scoring",
+        "failure" if isinstance(iqr_result, BaseException) else "success",
+        actor_user_id=user.id,
+        session_id=session_id,
+        persona_id=persona_id,
+        scorers=["iqr", "sic"],
+        turn_count=len(turns),
+        latency_ms=round((perf_counter() - started) * 1000),
+        iqr_model_used=iqr_scorer.last_model_used,
+        sic_model_used=sic_scorer.last_model_used,
+        iqr_prompt_version=iqr_scorer.prompt_version,
+        sic_prompt_version=sic_scorer.prompt_version,
+        injection_guard_version=INJECTION_GUARD_VERSION,
+        iqr_error_type=type(iqr_result).__name__ if isinstance(iqr_result, BaseException) else None,
+        sic_error_type=type(sic_result).__name__ if isinstance(sic_result, BaseException) else None,
     )
 
     # Exception *type* only, in the log and in the response. A scorer failure
@@ -349,8 +372,27 @@ async def eval_sic(session_id: UUID, user: Annotated[CurrentUser, Depends(requir
     turns = sanitize_transcript(_parse_transcript(session["transcript"]))
 
     scorer = SICScorer()
-    result = await scorer.evaluate(session["persona_id"], turns)
-    return result
+    started = perf_counter()
+    outcome: Outcome = "failure"
+    error_type = None
+    try:
+        result = await scorer.evaluate(session["persona_id"], turns)
+        outcome = "success"
+        return result
+    except Exception as e:
+        error_type = type(e).__name__
+        raise
+    finally:
+        audit(
+            "ai.scoring", outcome, actor_user_id=user.id,
+            session_id=session_id, persona_id=session["persona_id"],
+            scorers=["sic"], turn_count=len(turns),
+            latency_ms=round((perf_counter() - started) * 1000),
+            sic_model_used=scorer.last_model_used,
+            sic_prompt_version=scorer.prompt_version,
+            injection_guard_version=INJECTION_GUARD_VERSION,
+            sic_error_type=error_type,
+        )
 
 
 @router.get("/eval/sessions/{session_id}/latest")
@@ -379,6 +421,15 @@ async def get_latest_evaluation(
             session_id,
             user.id,
         )
+
+        if row is None:
+            # Someone else's session gets the same 404 as one never scored, but
+            # the attempt is recorded (deny_session_access audits it).
+            owner = await conn.fetchval(
+                "SELECT user_id FROM interview_sessions WHERE id = $1", session_id
+            )
+            if owner is not None and owner != user.id:
+                deny_session_access(session_id, user.id, owner)
 
     if row is None:
         raise HTTPException(status_code=404, detail="no evaluation found for session")

@@ -34,6 +34,7 @@ from app.auth.sessions import (
 )
 from app.config import settings
 from app.db import get_pool
+from app.observability.audit import audit
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,11 @@ def _clean_email(raw: str) -> str:
     return email
 
 
+def _failure_reason(exc: HTTPException) -> str:
+    detail: dict = exc.detail if isinstance(exc.detail, dict) else {}
+    return str(detail.get("code") or exc.status_code)
+
+
 def _user_payload(row) -> dict:
     return {
         "id": str(row["id"]),
@@ -136,12 +142,16 @@ async def register(payload: RegisterRequest, request: Request) -> dict:
         temp_password = issue_temp_password()
         temp_hash = hash_password(normalize_temp_password(temp_password))
 
+        # The audit log is internal, so it may record the outcome the
+        # response deliberately hides. It never records the address.
         if not settings.registration_permitted(email):
             logger.warning("Registration blocked, not on allowlist: %s", email)
+            audit("auth.register", "denied", request=request, reason="not_allowlisted")
             return {"status": "sent"}
 
         if await conn.fetchval("SELECT 1 FROM users WHERE email = $1", email):
             logger.info("Registration for an existing account, ignored: %s", email)
+            audit("auth.register", "denied", request=request, reason="account_exists")
             return {"status": "sent"}
 
         expires_at = datetime.now(timezone.utc) + timedelta(
@@ -172,6 +182,7 @@ async def register(payload: RegisterRequest, request: Request) -> dict:
 
     # Stands in for delivery until an email provider is chosen.
     logger.info("Temporary password for %s: %s", email, temp_password)
+    audit("auth.register", "success", request=request)
     return {"status": "sent"}
 
 
@@ -180,6 +191,18 @@ async def set_password(
     payload: SetPasswordRequest, request: Request, response: Response
 ) -> dict:
     """Exchange a temporary password for a real one, creating the account."""
+    try:
+        user = await _set_password(payload, request, response)
+    except HTTPException as e:
+        # rate_limited is already audited where it is enforced.
+        if _failure_reason(e) != "rate_limited":
+            audit("auth.set_password", "failure", request=request, reason=_failure_reason(e))
+        raise
+    audit("auth.set_password", "success", actor_user_id=user["id"], request=request)
+    return _user_payload(user)
+
+
+async def _set_password(payload: SetPasswordRequest, request: Request, response: Response):
     email = _clean_email(payload.email)
     temp_password = normalize_temp_password(payload.temp_password)
 
@@ -272,7 +295,7 @@ async def set_password(
 
     set_session_cookie(response, token, remember=False)
     logger.info("Account created: %s", email)
-    return _user_payload(user)
+    return user
 
 
 @router.post("/auth/login")
@@ -299,6 +322,15 @@ async def login(
         # one, so "no such account" and "wrong password" are indistinguishable
         # in both content and latency.
         if not verify_password(user["password_hash"] if user else None, payload.password):
+            # The targeted account, when there is one, so the SIEM can see an
+            # account being guessed at. Never the address that was typed.
+            audit(
+                "auth.login",
+                "failure",
+                actor_user_id=user["id"] if user else None,
+                request=request,
+                reason="invalid_credentials" if user else "unknown_account",
+            )
             raise _fail(
                 status.HTTP_401_UNAUTHORIZED,
                 "invalid_credentials",
@@ -308,6 +340,10 @@ async def login(
         token, _ = await create_session(conn, user["id"], remember=payload.remember)
 
     set_session_cookie(response, token, remember=payload.remember)
+    audit(
+        "auth.login", "success", actor_user_id=user["id"], request=request,
+        remember=payload.remember,
+    )
     return _user_payload(user)
 
 
@@ -317,7 +353,10 @@ async def logout(request: Request, response: Response) -> dict:
     if token:
         pool = await get_pool()
         async with pool.acquire() as conn:
+            row = await load_session_user(conn, token)
             await delete_session(conn, token)
+        if row is not None:
+            audit("auth.logout", "success", actor_user_id=row["id"], request=request)
     clear_session_cookie(response)
     return {"status": "ok"}
 

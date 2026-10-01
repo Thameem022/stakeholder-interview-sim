@@ -403,6 +403,37 @@ sudo tail -n 100 /var/log/apache2/stakeholder-engagement-simulator_error.log
 sudo tail -n 100 /var/log/apache2/stakeholder-engagement-simulator_access.log
 ```
 
+### Security audit events
+
+Security-relevant events are written as one JSON object per line on a dedicated
+`ses.audit` logger, separate from the application log: sign-in and sign-out,
+failed sign-ins, rate-limit trips, rejected sessions and CSRF checks, attempts
+to reach another participant's session, and metadata for every AI call
+(realtime session start, retrieval, scoring — model, prompt version, latency,
+outcome). Each event names `actor_user_id` and `participant_id`. Events never
+contain interview text, email addresses, or credentials.
+
+Where they go is set in `.env`:
+
+| `AUDIT_LOG_SINK` | Destination |
+|---|---|
+| `stdout` (default) | The service journal, alongside the application log |
+| `syslog` | Syslog facility `auth`, tag `ses-audit`, at `AUDIT_SYSLOG_ADDRESS` — `/dev/log` (default) for the local daemon, or `host:port` (UDP) for a forwarder |
+| `none` | Disabled — development only |
+
+```bash
+# Audit events only, from the journal (stdout sink)
+sudo journalctl -u stakeholder-engagement-simulator -o cat | grep '"type":"audit"'
+# Audit events only, from syslog (syslog sink)
+sudo journalctl -t ses-audit -o cat
+```
+
+**Still to arrange outside this repository:** forwarding these events to the
+institution's SIEM (point the local syslog forwarder, or `AUDIT_SYSLOG_ADDRESS`,
+at the collector it provides), retention of at least 12 months there, and
+cloud-provider audit logging for the AI account. None of the endpoint details
+belong in this repository.
+
 ---
 
 ## Known gotchas
