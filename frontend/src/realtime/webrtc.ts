@@ -37,6 +37,8 @@ const isAuthExpiry = (e: unknown): boolean =>
 export interface ConnectOptions {
   personaId: string
   voiceId?: string
+  /** Version of the pre-session notice the student just acknowledged. */
+  noticeVersion: string
   callbacks: RealtimeCallbacks
 }
 
@@ -92,6 +94,7 @@ export class RealtimeWebRTCSession {
 
     const { ephemeral_key, session_id, model } = await getRealtimeToken(
       opts.personaId,
+      opts.noticeVersion,
       opts.voiceId
     )
     this.sessionId = session_id

@@ -20,14 +20,18 @@ from app.auth.ratelimit import enforce
 from app.auth.sessions import load_session_user, touch_session
 from app.config import settings
 from app.db import get_pool
-from app.observability.audit import audit, participant_id_for
+from app.observability.audit import audit
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class CurrentUser:
+    # The sign-in account. Lives in the restricted identity store; used for
+    # sign-in machinery (sessions, rate limits) and nowhere near student work.
     id: UUID
+    # The pseudonym all student work is keyed to.
+    participant_id: UUID
     email: str
     first_name: str
     last_name: str
@@ -63,6 +67,7 @@ async def require_user(request: Request) -> CurrentUser:
 
     return CurrentUser(
         id=row["id"],
+        participant_id=row["participant_id"],
         email=row["email"],
         first_name=row["first_name"],
         last_name=row["last_name"],
@@ -90,7 +95,9 @@ def rate_limited(action: str, limit: int, window_seconds: int):
     return _dep
 
 
-def deny_session_access(session_id: UUID, requester: UUID, owner: UUID | None) -> NoReturn:
+def deny_session_access(
+    session_id: UUID, requester: CurrentUser, owner: UUID | None
+) -> NoReturn:
     """Log an ownership denial, then raise the same 404 as 'does not exist'.
 
     The response must not distinguish "someone else's" from "no such session" —
@@ -102,15 +109,16 @@ def deny_session_access(session_id: UUID, requester: UUID, owner: UUID | None) -
         audit(
             "authz.session_access",
             "denied",
-            actor_user_id=requester,
+            actor_user_id=requester.id,
+            participant_id=requester.participant_id,
             session_id=session_id,
-            owner_participant_id=participant_id_for(owner),
+            owner_participant_id=owner,
         )
         logger.warning(
             "ownership denied: session=%s owner=%s requester=%s",
             session_id,
             owner,
-            requester,
+            requester.participant_id,
         )
     raise auth_error(
         status.HTTP_404_NOT_FOUND, "session_not_found", "Session not found."

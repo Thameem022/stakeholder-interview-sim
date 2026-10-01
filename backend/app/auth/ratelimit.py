@@ -50,7 +50,7 @@ async def enforce(
     """Record an attempt against `bucket`, raising 429 once over `limit`."""
     used = await conn.fetchval(
         """
-        SELECT count(*) FROM auth_rate_limits
+        SELECT count(*) FROM identity.auth_rate_limits
         WHERE bucket = $1
           AND occurred_at > now() - make_interval(secs => $2::double precision)
         """,
@@ -67,12 +67,12 @@ async def enforce(
             },
         )
 
-    await conn.execute("INSERT INTO auth_rate_limits (bucket) VALUES ($1)", bucket)
+    await conn.execute("INSERT INTO identity.auth_rate_limits (bucket) VALUES ($1)", bucket)
     # Prune this bucket only — bounded work on an indexed range, so the table
     # stays small without a separate cleanup job.
     await conn.execute(
         """
-        DELETE FROM auth_rate_limits
+        DELETE FROM identity.auth_rate_limits
         WHERE bucket = $1
           AND occurred_at <= now() - make_interval(secs => $2::double precision)
         """,

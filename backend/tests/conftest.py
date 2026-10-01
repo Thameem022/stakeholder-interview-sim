@@ -112,12 +112,15 @@ def owned_session():
     """
 
     def _make(user_id: str, transcript: str = "[]") -> uuid.UUID:
+        # Takes the account id the auth fixtures hand out; the row is keyed by
+        # that account's pseudonym, as the app would key it.
         sid = uuid.uuid4()
         sql(
             """
             INSERT INTO interview_sessions
-                (id, user_id, persona_id, voice_id, started_at, transcript)
-            VALUES (%s, %s, 'alex_martinez', 'alloy', now(), %s::jsonb)
+                (id, participant_id, persona_id, voice_id, started_at, transcript)
+            VALUES (%s, (SELECT participant_id FROM identity.users WHERE id = %s),
+                    'alex_martinez', 'alloy', now(), %s::jsonb)
             """,
             (str(sid), user_id, transcript),
         )

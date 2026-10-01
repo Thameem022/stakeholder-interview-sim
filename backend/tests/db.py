@@ -38,20 +38,33 @@ def scalar(query: str, args: tuple = ()):
 def cleanup_test_rows() -> None:
     """Remove everything this suite created, in FK-safe order.
 
-    interview_sessions must go before users: the FK added in 0005 is
-    ON DELETE RESTRICT, so deleting a user who owns a session raises
-    ForeignKeyViolation. Because this runs on both sides of the `client`
-    fixture, that failure would otherwise cascade into every later test.
-    session_evaluations cascades from interview_sessions.
+    Sessions, then accounts, then participants: both FKs onto participants are
+    ON DELETE RESTRICT, so a participant still referenced by a session or an
+    account cannot go. Because this runs on both sides of the `client`
+    fixture, a failure here would cascade into every later test.
+    session_evaluations and retrieval_events cascade from interview_sessions.
     """
     sql(
-        "DELETE FROM interview_sessions WHERE user_id IN "
-        "(SELECT id FROM users WHERE email LIKE %s)",
+        "DELETE FROM interview_sessions WHERE participant_id IN "
+        "(SELECT participant_id FROM identity.users WHERE email LIKE %s)",
         (_TEST_LIKE,),
     )
-    # auth_sessions cascades from users.
-    sql("DELETE FROM users WHERE email LIKE %s", (_TEST_LIKE,))
-    sql("DELETE FROM pending_registrations WHERE email LIKE %s", (_TEST_LIKE,))
+    # auth_sessions cascades from users; the participant goes once the account has.
+    sql(
+        """
+        WITH gone AS (
+            DELETE FROM identity.users WHERE email LIKE %s RETURNING participant_id
+        )
+        DELETE FROM participants WHERE participant_id IN (SELECT participant_id FROM gone)
+        """,
+        (_TEST_LIKE,),
+    )
+    sql("DELETE FROM identity.pending_registrations WHERE email LIKE %s", (_TEST_LIKE,))
     # Rate-limit buckets embed the address, and IP buckets are shared by every
     # test, so clear the whole table or later tests inherit earlier counts.
-    sql("DELETE FROM auth_rate_limits")
+    sql("DELETE FROM identity.auth_rate_limits")
+
+
+def participant_of(user_id: str) -> str:
+    """The pseudonym an account's work is keyed to."""
+    return str(scalar("SELECT participant_id FROM identity.users WHERE id = %s", (user_id,)))

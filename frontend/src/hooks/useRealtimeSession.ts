@@ -20,7 +20,8 @@ export interface RealtimeSession {
   analyser: AnalyserNode | null
   remoteStream: MediaStream | null
   error: string | null
-  start: () => Promise<void>
+  /** Starts an interview; requires the acknowledged notice version. */
+  start: (noticeVersion: string) => Promise<void>
   end: () => void
 }
 
@@ -76,7 +77,7 @@ export function useRealtimeSession(opts: UseRealtimeSessionOptions): RealtimeSes
     }
   }, [])
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (noticeVersion: string) => {
     if (status !== 'idle') return
     setStatus('connecting')
     setError(null)
@@ -90,6 +91,7 @@ export function useRealtimeSession(opts: UseRealtimeSessionOptions): RealtimeSes
       await sess.connect({
         personaId: opts.personaId,
         voiceId: opts.voiceId,
+        noticeVersion,
         callbacks: {
           onSessionReady: (sid) => setSessionId(sid),
           onRemoteStream: (stream) => setRemoteStream(stream),

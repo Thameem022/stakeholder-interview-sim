@@ -175,7 +175,7 @@ Two conventions worth knowing:
 
 ## Database
 
-Six Alembic migrations:
+Seven Alembic migrations:
 
 | Revision | Adds |
 |---|---|
@@ -185,6 +185,22 @@ Six Alembic migrations:
 | `0004_auth_rate_limits` | `auth_rate_limits` |
 | `0005_session_ownership` | `interview_sessions.user_id` ownership backfill |
 | `0006_retrieval_events` | `retrieval_events` (per-retrieve-call timing + result telemetry) |
+| `0007_pseudonymous_participants` | `participants`; sign-in tables moved to the restricted `identity` schema; sessions re-keyed from `user_id` to `participant_id`; pre-session notice acknowledgement |
+
+### Pseudonymous data model
+
+Student work (`interview_sessions` and everything hanging off it) is keyed
+**only** by a pseudonymous `participant_id`. Names, email addresses,
+credentials and the sign-in ↔ pseudonym link live in the separate `identity`
+schema, which nothing in `public` references. Database roles:
+`ses_course_reader` (instructors / study personnel — work tables only) and
+`ses_support_owner` (the only role that can read `identity`). The data stays
+**Restricted**: the mapping exists, so records remain re-linkable.
+
+**Audio is never stored by SES.** It streams from the browser to the AI service
+for live transcription and the persona's replies; only the written transcript
+comes back. No table, file or browser store holds audio, and
+`tests/test_pseudonym.py` fails if one appears.
 
 `0005` reads `LEGACY_SESSION_OWNER_EMAIL` once to assign pre-auth sessions an
 owner, falling back to the oldest account, and **fails loudly rather than

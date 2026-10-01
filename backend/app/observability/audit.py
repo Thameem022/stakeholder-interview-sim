@@ -55,16 +55,6 @@ _logger = logging.getLogger(AUDIT_LOGGER_NAME)
 _logger.propagate = False
 
 
-def participant_id_for(user_id: Optional[UUID]) -> Optional[str]:
-    """The pseudonymous id work is keyed to.
-
-    Until pseudonymous participant ids exist (SR-2026-052 item 1.2) this is the
-    account id. Every event gets it from here, so switching to the real
-    pseudonym is a change to this one function.
-    """
-    return str(user_id) if user_id is not None else None
-
-
 def _clean(value: Any) -> Any:
     if value is None or isinstance(value, (bool, int, float)):
         return value
@@ -79,6 +69,7 @@ def audit(
     outcome: Outcome,
     *,
     actor_user_id: Optional[UUID] = None,
+    participant_id: Optional[UUID] = None,
     request: Optional[Request] = None,
     **fields: Any,
 ) -> None:
@@ -96,7 +87,7 @@ def audit(
         "event": event,
         "outcome": outcome,
         "actor_user_id": str(actor_user_id) if actor_user_id is not None else None,
-        "participant_id": participant_id_for(actor_user_id),
+        "participant_id": str(participant_id) if participant_id is not None else None,
     }
     if request is not None:
         record["ip"] = client_ip(request)

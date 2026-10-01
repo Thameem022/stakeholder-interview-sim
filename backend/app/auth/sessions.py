@@ -41,7 +41,7 @@ async def create_session(
     )
     expires_at = datetime.now(timezone.utc) + ttl
     await conn.execute(
-        "INSERT INTO auth_sessions (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
+        "INSERT INTO identity.auth_sessions (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
         user_id,
         hash_session_token(token),
         expires_at,
@@ -59,9 +59,9 @@ async def load_session_user(
     """
     return await conn.fetchrow(
         """
-        SELECT u.id, u.email, u.first_name, u.last_name, s.id AS session_id
-        FROM auth_sessions s
-        JOIN users u ON u.id = s.user_id
+        SELECT u.id, u.participant_id, u.email, u.first_name, u.last_name, s.id AS session_id
+        FROM identity.auth_sessions s
+        JOIN identity.users u ON u.id = s.user_id
         WHERE s.token_hash = $1
           AND s.expires_at > now()
           AND u.is_active
@@ -89,13 +89,13 @@ async def touch_session(
     """
     if min_interval_seconds is None:
         await conn.execute(
-            "UPDATE auth_sessions SET last_seen_at = now() WHERE id = $1", session_id
+            "UPDATE identity.auth_sessions SET last_seen_at = now() WHERE id = $1", session_id
         )
         return
 
     await conn.execute(
         """
-        UPDATE auth_sessions
+        UPDATE identity.auth_sessions
            SET last_seen_at = now()
          WHERE id = $1
            AND last_seen_at < now() - make_interval(secs => $2::double precision)
@@ -107,12 +107,12 @@ async def touch_session(
 
 async def delete_session(conn: asyncpg.Connection, token: str) -> None:
     await conn.execute(
-        "DELETE FROM auth_sessions WHERE token_hash = $1", hash_session_token(token)
+        "DELETE FROM identity.auth_sessions WHERE token_hash = $1", hash_session_token(token)
     )
 
 
 async def delete_expired_sessions(conn: asyncpg.Connection) -> None:
-    await conn.execute("DELETE FROM auth_sessions WHERE expires_at <= now()")
+    await conn.execute("DELETE FROM identity.auth_sessions WHERE expires_at <= now()")
 
 
 def set_session_cookie(response: Response, token: str, remember: bool) -> None:

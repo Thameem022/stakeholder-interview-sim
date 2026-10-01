@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Route, Routes, useNavigate } from 'react-router-dom'
-import { Avatar, Header } from './components'
+import { Avatar, Header, PreSessionNotice } from './components'
 import { useRealtimeSession } from './hooks/useRealtimeSession'
 import { Persona, evalIqr, getPersonas } from './api'
 import { personaMeta } from './personas'
@@ -92,6 +92,9 @@ function InterviewView() {
   const [selected, setSelected] = useState<string>('')
   const [scoring, setScoring] = useState(false)
   const [scoringError, setScoringError] = useState('')
+  // The notice stands between "Start interview" and the interview itself,
+  // every time.
+  const [showNotice, setShowNotice] = useState(false)
   const navigate = useNavigate()
   const { refresh } = useAuth()
 
@@ -237,7 +240,7 @@ function InterviewView() {
             <div className="my-4 flex justify-center gap-3">
               {session.status === 'idle' && (
                 <button
-                  onClick={session.start}
+                  onClick={() => setShowNotice(true)}
                   className="h-[46px] rounded-lg bg-brand px-8 text-[12.5px] font-semibold uppercase tracking-[0.1em] text-white transition-colors hover:bg-brand-hover"
                 >
                   Start interview
@@ -282,6 +285,16 @@ function InterviewView() {
                 </p>
               </div>
             </div>
+
+            {showNotice && (
+              <PreSessionNotice
+                onCancel={() => setShowNotice(false)}
+                onAcknowledge={(version) => {
+                  setShowNotice(false)
+                  void session.start(version)
+                }}
+              />
+            )}
 
             {(session.error || scoringError) && (
               <div className="mt-4 border-l-[3px] border-danger bg-danger-bg px-3.5 py-3 text-[13.5px] leading-[1.5] text-danger">

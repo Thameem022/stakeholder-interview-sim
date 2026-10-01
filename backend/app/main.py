@@ -32,6 +32,7 @@ from app.auth.dependencies import require_user
 from app.config import settings
 from app.db import close_pool, init_pool
 from app.observability.audit import configure_audit_logging
+from app.realtime.notice import router as realtime_notice_router
 from app.realtime.retrieve import router as realtime_retrieve_router
 from app.realtime.token import router as realtime_token_router
 
@@ -77,6 +78,7 @@ _authenticated = [Depends(require_user)]
 app.include_router(personas_router, prefix="/api", dependencies=_authenticated)
 app.include_router(eval_router, prefix="/api", dependencies=_authenticated)
 app.include_router(realtime_token_router, prefix="/api", dependencies=_authenticated)
+app.include_router(realtime_notice_router, prefix="/api", dependencies=_authenticated)
 app.include_router(realtime_retrieve_router, prefix="/api", dependencies=_authenticated)
 
 static_dir = Path(__file__).parent.parent / "static"

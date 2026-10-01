@@ -27,10 +27,12 @@ class Turn:
 @dataclass
 class InterviewSession:
     id: UUID
-    user_id: UUID
+    participant_id: UUID
     persona_id: str
     voice_id: str
     started_at: datetime
+    # Which pre-session notice the student acknowledged before this interview.
+    notice_version: Optional[str] = None
     turns: List[Turn] = field(default_factory=list)
 
     def add_turn(self, role: str, text: str) -> None:
@@ -51,20 +53,23 @@ class InterviewSession:
             await conn.execute(
                 """
                 INSERT INTO interview_sessions
-                    (id, user_id, persona_id, voice_id, started_at, transcript)
-                VALUES ($1, $2, $3, $4, $5, '[]'::jsonb)
+                    (id, participant_id, persona_id, voice_id, started_at, transcript,
+                     notice_version, notice_acknowledged_at)
+                VALUES ($1, $2, $3, $4, $5, '[]'::jsonb, $6,
+                        CASE WHEN $6::text IS NULL THEN NULL ELSE now() END)
                 """,
                 self.id,
-                self.user_id,
+                self.participant_id,
                 self.persona_id,
                 self.voice_id,
                 self.started_at,
+                self.notice_version,
             )
 
     async def persist(self, ended: bool = False) -> None:
         """Write the transcript back, only if this session is still ours.
 
-        The `user_id` predicate on the UPDATE itself — not just on the earlier
+        The `participant_id` predicate on the UPDATE itself — not just on the earlier
         load — is what closes the load-then-write gap: even if ownership
         changed in between, the write cannot land on someone else's row.
         """
@@ -79,10 +84,10 @@ class InterviewSession:
                        -- has ended the interview must not reopen it, which the
                        -- old `utcnow() if ended else None` did on every append.
                        ended_at = CASE WHEN $4 THEN now() ELSE ended_at END
-                 WHERE id = $1 AND user_id = $2
+                 WHERE id = $1 AND participant_id = $2
                 """,
                 self.id,
-                self.user_id,
+                self.participant_id,
                 transcript_json,
                 ended,
             )
@@ -102,28 +107,28 @@ class InterviewSession:
         pool = await get_pool()
         async with pool.acquire() as conn:
             return await conn.fetchval(
-                "SELECT user_id FROM interview_sessions WHERE id = $1", session_id
+                "SELECT participant_id FROM interview_sessions WHERE id = $1", session_id
             )
 
     @classmethod
     async def load(
-        cls, session_id: UUID, user_id: UUID
+        cls, session_id: UUID, participant_id: UUID
     ) -> Optional["InterviewSession"]:
-        """Hydrate a session owned by `user_id`. None if absent or not theirs.
+        """Hydrate a session owned by `participant_id`. None if absent or not theirs.
 
-        `user_id` is required rather than an optional filter — a default would
+        `participant_id` is required rather than an optional filter — a default would
         be an invitation for a future call site to skip the check silently.
         """
         pool = await get_pool()
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                SELECT id, user_id, persona_id, voice_id, started_at, transcript
+                SELECT id, participant_id, persona_id, voice_id, started_at, transcript
                 FROM interview_sessions
-                WHERE id = $1 AND user_id = $2
+                WHERE id = $1 AND participant_id = $2
                 """,
                 session_id,
-                user_id,
+                participant_id,
             )
         if row is None:
             return None
@@ -141,7 +146,7 @@ class InterviewSession:
 
         return cls(
             id=row["id"],
-            user_id=row["user_id"],
+            participant_id=row["participant_id"],
             persona_id=row["persona_id"],
             voice_id=row["voice_id"] or "",
             started_at=row["started_at"],

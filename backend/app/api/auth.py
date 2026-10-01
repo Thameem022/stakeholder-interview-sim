@@ -149,7 +149,7 @@ async def register(payload: RegisterRequest, request: Request) -> dict:
             audit("auth.register", "denied", request=request, reason="not_allowlisted")
             return {"status": "sent"}
 
-        if await conn.fetchval("SELECT 1 FROM users WHERE email = $1", email):
+        if await conn.fetchval("SELECT 1 FROM identity.users WHERE email = $1", email):
             logger.info("Registration for an existing account, ignored: %s", email)
             audit("auth.register", "denied", request=request, reason="account_exists")
             return {"status": "sent"}
@@ -159,7 +159,7 @@ async def register(payload: RegisterRequest, request: Request) -> dict:
         )
         await conn.execute(
             """
-            INSERT INTO pending_registrations
+            INSERT INTO identity.pending_registrations
                 (email, first_name, last_name, temp_password_hash, expires_at)
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (email) WHERE consumed_at IS NULL
@@ -198,7 +198,10 @@ async def set_password(
         if _failure_reason(e) != "rate_limited":
             audit("auth.set_password", "failure", request=request, reason=_failure_reason(e))
         raise
-    audit("auth.set_password", "success", actor_user_id=user["id"], request=request)
+    audit(
+        "auth.set_password", "success", actor_user_id=user["id"],
+        participant_id=user["participant_id"], request=request,
+    )
     return _user_payload(user)
 
 
@@ -216,7 +219,7 @@ async def _set_password(payload: SetPasswordRequest, request: Request, response:
         pending = await conn.fetchrow(
             """
             SELECT id, first_name, last_name, temp_password_hash, expires_at, attempts
-            FROM pending_registrations
+            FROM identity.pending_registrations
             WHERE email = $1 AND consumed_at IS NULL
             """,
             email,
@@ -242,7 +245,7 @@ async def _set_password(payload: SetPasswordRequest, request: Request, response:
 
         if not verify_password(pending["temp_password_hash"], temp_password):
             await conn.execute(
-                "UPDATE pending_registrations SET attempts = attempts + 1 WHERE id = $1",
+                "UPDATE identity.pending_registrations SET attempts = attempts + 1 WHERE id = $1",
                 pending["id"],
             )
             raise _fail(
@@ -267,17 +270,24 @@ async def _set_password(payload: SetPasswordRequest, request: Request, response:
         # One transaction so an account can never exist with its registration
         # still open, nor a registration be consumed without an account.
         async with conn.transaction():
+            # The pseudonym is minted with the account, in the same
+            # transaction, so no account ever exists without one.
+            participant_id = await conn.fetchval(
+                "INSERT INTO participants DEFAULT VALUES RETURNING participant_id"
+            )
             user = await conn.fetchrow(
                 """
-                INSERT INTO users (email, first_name, last_name, password_hash)
-                VALUES ($1, $2, $3, $4)
+                INSERT INTO identity.users
+                    (email, first_name, last_name, password_hash, participant_id)
+                VALUES ($1, $2, $3, $4, $5)
                 ON CONFLICT (email) DO NOTHING
-                RETURNING id, email, first_name, last_name
+                RETURNING id, participant_id, email, first_name, last_name
                 """,
                 email,
                 pending["first_name"],
                 pending["last_name"],
                 password_hash,
+                participant_id,
             )
             if user is None:
                 # An account appeared between the check in register and now.
@@ -288,7 +298,7 @@ async def _set_password(payload: SetPasswordRequest, request: Request, response:
                 )
 
             await conn.execute(
-                "UPDATE pending_registrations SET consumed_at = now() WHERE id = $1",
+                "UPDATE identity.pending_registrations SET consumed_at = now() WHERE id = $1",
                 pending["id"],
             )
             token, _ = await create_session(conn, user["id"], remember=False)
@@ -312,8 +322,8 @@ async def login(
 
         user = await conn.fetchrow(
             """
-            SELECT id, email, first_name, last_name, password_hash
-            FROM users
+            SELECT id, participant_id, email, first_name, last_name, password_hash
+            FROM identity.users
             WHERE email = $1 AND is_active
             """,
             email,
@@ -328,6 +338,7 @@ async def login(
                 "auth.login",
                 "failure",
                 actor_user_id=user["id"] if user else None,
+                participant_id=user["participant_id"] if user else None,
                 request=request,
                 reason="invalid_credentials" if user else "unknown_account",
             )
@@ -341,7 +352,8 @@ async def login(
 
     set_session_cookie(response, token, remember=payload.remember)
     audit(
-        "auth.login", "success", actor_user_id=user["id"], request=request,
+        "auth.login", "success", actor_user_id=user["id"],
+        participant_id=user["participant_id"], request=request,
         remember=payload.remember,
     )
     return _user_payload(user)
@@ -356,7 +368,10 @@ async def logout(request: Request, response: Response) -> dict:
             row = await load_session_user(conn, token)
             await delete_session(conn, token)
         if row is not None:
-            audit("auth.logout", "success", actor_user_id=row["id"], request=request)
+            audit(
+                "auth.logout", "success", actor_user_id=row["id"],
+                participant_id=row["participant_id"], request=request,
+            )
     clear_session_cookie(response)
     return {"status": "ok"}
 

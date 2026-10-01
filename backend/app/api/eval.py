@@ -187,7 +187,7 @@ SCORER_METADATA = {
 }
 
 
-async def _load_session(session_id: UUID, user_id: UUID) -> dict:
+async def _load_session(session_id: UUID, user: CurrentUser) -> dict:
     """Load a session the caller owns.
 
     A session belonging to someone else answers exactly like one that does not
@@ -200,16 +200,16 @@ async def _load_session(session_id: UUID, user_id: UUID) -> dict:
             """
             SELECT persona_id, transcript, metadata
             FROM interview_sessions
-            WHERE id = $1 AND user_id = $2
+            WHERE id = $1 AND participant_id = $2
             """,
             session_id,
-            user_id,
+            user.participant_id,
         )
         if row is None:
             owner = await conn.fetchval(
-                "SELECT user_id FROM interview_sessions WHERE id = $1", session_id
+                "SELECT participant_id FROM interview_sessions WHERE id = $1", session_id
             )
-            deny_session_access(session_id, user_id, owner)
+            deny_session_access(session_id, user, owner)
     return dict(row)
 
 
@@ -260,7 +260,7 @@ async def eval_iqr(session_id: UUID, user: Annotated[CurrentUser, Depends(requir
     )
     from app.evaluation.sic_scorer import SICScorer
 
-    session = await _load_session(session_id, user.id)
+    session = await _load_session(session_id, user)
     turns = _parse_transcript(session["transcript"])
     # Strip whisper/turn-splitting artifacts before scoring so noise can't
     # depress IQR/SIC results (item 11).
@@ -292,7 +292,7 @@ async def eval_iqr(session_id: UUID, user: Annotated[CurrentUser, Depends(requir
     audit(
         "ai.scoring",
         "failure" if isinstance(iqr_result, BaseException) else "success",
-        actor_user_id=user.id,
+        actor_user_id=user.id, participant_id=user.participant_id,
         session_id=session_id,
         persona_id=persona_id,
         scorers=["iqr", "sic"],
@@ -368,7 +368,7 @@ async def eval_sic(session_id: UUID, user: Annotated[CurrentUser, Depends(requir
     """Run SIC scorer standalone (ad-hoc use; the frontend calls /eval/iqr)."""
     from app.evaluation.sic_scorer import SICScorer
 
-    session = await _load_session(session_id, user.id)
+    session = await _load_session(session_id, user)
     turns = sanitize_transcript(_parse_transcript(session["transcript"]))
 
     scorer = SICScorer()
@@ -384,7 +384,7 @@ async def eval_sic(session_id: UUID, user: Annotated[CurrentUser, Depends(requir
         raise
     finally:
         audit(
-            "ai.scoring", outcome, actor_user_id=user.id,
+            "ai.scoring", outcome, actor_user_id=user.id, participant_id=user.participant_id,
             session_id=session_id, persona_id=session["persona_id"],
             scorers=["sic"], turn_count=len(turns),
             latency_ms=round((perf_counter() - started) * 1000),
@@ -406,7 +406,7 @@ async def get_latest_evaluation(
     """
     pool = await get_pool()
     async with pool.acquire() as conn:
-        # Ownership comes from the join rather than a user_id column on
+        # Ownership comes from the join rather than a participant_id column on
         # session_evaluations — a second copy of the same fact would be free to
         # drift, to save a primary-key lookup.
         row = await conn.fetchrow(
@@ -414,22 +414,22 @@ async def get_latest_evaluation(
             SELECT e.evaluation, e.created_at
             FROM session_evaluations e
             JOIN interview_sessions s ON s.id = e.session_id
-            WHERE e.session_id = $1 AND s.user_id = $2
+            WHERE e.session_id = $1 AND s.participant_id = $2
             ORDER BY e.created_at DESC
             LIMIT 1
             """,
             session_id,
-            user.id,
+            user.participant_id,
         )
 
         if row is None:
             # Someone else's session gets the same 404 as one never scored, but
             # the attempt is recorded (deny_session_access audits it).
             owner = await conn.fetchval(
-                "SELECT user_id FROM interview_sessions WHERE id = $1", session_id
+                "SELECT participant_id FROM interview_sessions WHERE id = $1", session_id
             )
-            if owner is not None and owner != user.id:
-                deny_session_access(session_id, user.id, owner)
+            if owner is not None and owner != user.participant_id:
+                deny_session_access(session_id, user, owner)
 
     if row is None:
         raise HTTPException(status_code=404, detail="no evaluation found for session")

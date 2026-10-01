@@ -12,8 +12,9 @@ import uuid
 import pytest
 
 from app.config import settings
+from app.realtime.notice import NOTICE_VERSION
 from tests.conftest import GOOD_PASSWORD, register, set_password, sign_in_as
-from tests.db import scalar, sql
+from tests.db import participant_of, scalar, sql
 
 # (method, path, json) for every route that must require a session.
 PROTECTED_ROUTES = [
@@ -209,7 +210,11 @@ def test_token_mint_cannot_target_an_existing_session(
     sign_in_as(client, email_b, GOOD_PASSWORD)
     r = client.post(
         "/api/realtime/token",
-        json={"persona_id": "alex_martinez", "session_id": str(sid)},
+        json={
+            "persona_id": "alex_martinez",
+            "session_id": str(sid),
+            "notice_version": NOTICE_VERSION,
+        },
     )
     assert r.status_code == 502, "expected the stubbed OpenAI call to fail the mint"
 
@@ -217,8 +222,8 @@ def test_token_mint_cannot_target_an_existing_session(
         "SELECT transcript::text FROM interview_sessions WHERE id = %s", (str(sid),)
     )
     assert scalar(
-        "SELECT user_id::text FROM interview_sessions WHERE id = %s", (str(sid),)
-    ) == user_a
+        "SELECT participant_id::text FROM interview_sessions WHERE id = %s", (str(sid),)
+    ) == participant_of(user_a)
 
 
 # --- metering ---------------------------------------------------------------
@@ -245,12 +250,12 @@ def test_scoring_is_rate_limited_per_user(logged_in_client):
 def test_last_seen_at_is_not_rewritten_on_every_request(logged_in_client):
     client, _ = logged_in_client
     client.get("/api/personas")
-    first = scalar("SELECT max(last_seen_at) FROM auth_sessions")
+    first = scalar("SELECT max(last_seen_at) FROM identity.auth_sessions")
 
     client.get("/api/personas")
-    assert scalar("SELECT max(last_seen_at) FROM auth_sessions") == first
+    assert scalar("SELECT max(last_seen_at) FROM identity.auth_sessions") == first
 
     # Backdate past the throttle window and it refreshes again.
-    sql("UPDATE auth_sessions SET last_seen_at = now() - interval '10 minutes'")
+    sql("UPDATE identity.auth_sessions SET last_seen_at = now() - interval '10 minutes'")
     client.get("/api/personas")
-    assert scalar("SELECT max(last_seen_at) FROM auth_sessions") > first
+    assert scalar("SELECT max(last_seen_at) FROM identity.auth_sessions") > first

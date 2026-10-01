@@ -16,8 +16,9 @@ import pytest
 
 from app.config import get_settings, settings
 from app.observability import audit as audit_mod
+from app.realtime.notice import NOTICE_VERSION
 from tests.conftest import GOOD_PASSWORD, TEMP, register, set_password, sign_in_as
-from tests.db import scalar
+from tests.db import participant_of, scalar
 
 SECRET = "my-private-disclosure-91ab"
 
@@ -66,13 +67,15 @@ def _new_user(client) -> tuple[str, str]:
 
 
 def test_every_event_is_one_json_line_with_actor_and_pseudonym(audit_log):
-    actor = uuid.uuid4()
-    audit_mod.audit("test.event", "success", actor_user_id=actor, detail="x")
+    actor, pseudonym = uuid.uuid4(), uuid.uuid4()
+    audit_mod.audit(
+        "test.event", "success", actor_user_id=actor, participant_id=pseudonym, detail="x"
+    )
     (event,) = audit_log.events
     assert event["type"] == "audit" and event["schema"] == audit_mod.AUDIT_SCHEMA_VERSION
     assert event["event"] == "test.event" and event["outcome"] == "success"
     assert event["actor_user_id"] == str(actor)
-    assert event["participant_id"] == audit_mod.participant_id_for(actor)
+    assert event["participant_id"] == str(pseudonym)
     assert "\n" not in audit_log.lines[0]
 
 
@@ -114,7 +117,8 @@ def test_login_success_and_logout_are_audited(client, audit_log):
 
     login = [e for e in audit_log.named("auth.login") if e["outcome"] == "success"]
     assert login[-1]["actor_user_id"] == user_id
-    assert login[-1]["participant_id"] == user_id
+    assert login[-1]["participant_id"] == participant_of(user_id)
+    assert login[-1]["participant_id"] != user_id
     (logout,) = audit_log.named("auth.logout")
     assert logout["actor_user_id"] == user_id
     _no_pii(audit_log, email, GOOD_PASSWORD)
@@ -193,7 +197,8 @@ def test_touching_another_participants_session_is_audited(
     (event,) = audit_log.named("authz.session_access")
     assert event["outcome"] == "denied"
     assert event["actor_user_id"] == intruder
-    assert event["owner_participant_id"] == owner
+    assert event["owner_participant_id"] == participant_of(owner)
+    assert event["participant_id"] == participant_of(intruder)
     assert event["session_id"] == str(sid)
     _no_pii(audit_log, SECRET)
 
@@ -207,7 +212,7 @@ def test_realtime_session_mint_is_audited(logged_in_client, monkeypatch, audit_l
 
     monkeypatch.setattr(httpx.AsyncClient, "post", _ok)
     client, user_id = logged_in_client
-    r = client.post("/api/realtime/token", json={"persona_id": "alex_martinez"})
+    r = client.post("/api/realtime/token", json={"persona_id": "alex_martinez", "notice_version": NOTICE_VERSION})
     assert r.status_code == 200, r.text
 
     (event,) = audit_log.named("ai.realtime_session")
@@ -224,7 +229,7 @@ def test_a_failed_realtime_mint_is_audited(logged_in_client, monkeypatch, audit_
 
     monkeypatch.setattr(httpx.AsyncClient, "post", _down)
     client, _ = logged_in_client
-    client.post("/api/realtime/token", json={"persona_id": "alex_martinez"})
+    client.post("/api/realtime/token", json={"persona_id": "alex_martinez", "notice_version": NOTICE_VERSION})
     (event,) = audit_log.named("ai.realtime_session")
     assert event["outcome"] == "failure" and event["error_type"] == "ConnectError"
 

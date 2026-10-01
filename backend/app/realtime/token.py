@@ -17,7 +17,7 @@ from typing import Annotated, Any, Dict, Optional
 from uuid import uuid4
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from app.auth.dependencies import CurrentUser, rate_limited, require_user
@@ -25,6 +25,7 @@ from app.config import settings
 from app.observability.audit import audit
 from app.personas.prompt_assembly import build_persona_system_prompt
 from app.personas.voices import VOICE_MAP
+from app.realtime.notice import NOTICE_VERSION
 from app.realtime.session import InterviewSession
 
 logger = logging.getLogger(__name__)
@@ -73,6 +74,9 @@ class TokenRequest(BaseModel):
     # frontend bundles don't 422 mid-rollout. The simulator now always runs
     # in no-barge-in mode regardless of this value.
     turn_based: Optional[bool] = None
+    # The pre-session notice version the student acknowledged. Must match the
+    # current one (app/realtime/notice.py) or no interview starts.
+    notice_version: Optional[str] = None
 
 
 class TokenResponse(BaseModel):
@@ -133,6 +137,22 @@ async def mint_token(
     if not req.persona_id:
         raise HTTPException(status_code=400, detail="persona_id required")
 
+    # Enforced here, not just in the UI: no session row, no credential, until
+    # the current notice has been acknowledged.
+    if req.notice_version != NOTICE_VERSION:
+        audit(
+            "interview.notice", "denied", actor_user_id=user.id,
+            participant_id=user.participant_id, presented_version=req.notice_version,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+            detail={
+                "code": "notice_not_acknowledged",
+                "message": "Please read and acknowledge the notice before starting.",
+                "notice_version": NOTICE_VERSION,
+            },
+        )
+
     sid = uuid4()
     voice_id = req.voice_id or VOICE_MAP.get(req.persona_id, "alloy")
     session_config = _build_session_config(req.persona_id, voice_id)
@@ -142,7 +162,8 @@ async def mint_token(
     # fail on our side.
     session = InterviewSession(
         id=sid,
-        user_id=user.id,
+        participant_id=user.participant_id,
+        notice_version=req.notice_version,
         persona_id=req.persona_id,
         voice_id=voice_id,
         started_at=datetime.utcnow(),
@@ -152,6 +173,7 @@ async def mint_token(
     def _audit_mint(outcome, **fields) -> None:
         audit(
             "ai.realtime_session", outcome, actor_user_id=user.id,
+            participant_id=user.participant_id,
             session_id=sid, persona_id=req.persona_id, voice_id=voice_id,
             model=settings.openai_realtime_model,
             latency_ms=round((perf_counter() - started) * 1000), **fields,
@@ -192,7 +214,8 @@ async def mint_token(
 
     _audit_mint("success")
     logger.info(
-        f"minted ephemeral key for session={sid} persona={req.persona_id} user={user.id}"
+        f"minted ephemeral key for session={sid} persona={req.persona_id} "
+        f"participant={user.participant_id}"
     )
     return TokenResponse(
         ephemeral_key=ephemeral_key,

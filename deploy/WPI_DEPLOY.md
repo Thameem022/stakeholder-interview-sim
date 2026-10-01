@@ -162,7 +162,24 @@ cd /opt/stakeholder-engagement-simulator/backend
 sudo -u mohammedthameem uv run alembic upgrade head
 ```
 
-You should see every migration apply in order, `0001_initial` through `0006_retrieval_events`.
+You should see every migration apply in order, `0001_initial` through `0007_pseudonymous_participants`.
+
+> **Before `0007` on a server:** the database owner (`sis`) cannot create roles,
+> so create the two access roles as the Postgres superuser **first** — the
+> migration then grants them the right access (and prints a NOTICE if they are
+> missing):
+>
+> ```bash
+> sudo -u postgres psql -c "CREATE ROLE ses_support_owner NOLOGIN;" \
+>                       -c "CREATE ROLE ses_course_reader NOLOGIN;"
+> ```
+>
+> Grant `ses_support_owner` only to the Solution Support Owner's own login role
+> (`GRANT ses_support_owner TO <their_login>;`); instructors or study personnel
+> who need database read access get `ses_course_reader`, which cannot read the
+> `identity` schema. If the roles are created after migrating, re-run the
+> grants: `alembic downgrade 0006_retrieval_events && alembic upgrade head`
+> (lossless), or apply the GRANTs from the migration by hand.
 
 > **`alembic` does not load `.env`.** `alembic/env.py` falls back to the DSN in
 > `alembic.ini` (`postgres:postgres@localhost/sis`), which is not this server's

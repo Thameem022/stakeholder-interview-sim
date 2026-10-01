@@ -170,9 +170,9 @@ async def retrieve_context(
     # Checked before anything is embedded, searched or logged, so another
     # participant's session id buys the caller nothing — not even a telemetry
     # row attributed to that session. Same 404 as "does not exist".
-    session = await InterviewSession.load(sid, user.id)
+    session = await InterviewSession.load(sid, user.participant_id)
     if session is None:
-        deny_session_access(sid, user.id, await InterviewSession.owner_of(sid))
+        deny_session_access(sid, user, await InterviewSession.owner_of(sid))
     if session.persona_id != req.persona_id:
         raise HTTPException(status_code=400, detail="persona_id does not match session")
 
@@ -192,7 +192,7 @@ async def retrieve_context(
             k_persona=k_persona, k_world=k_world, error=f"embed: {type(e).__name__}",
         )
         audit(
-            "ai.retrieve", "failure", actor_user_id=user.id,
+            "ai.retrieve", "failure", actor_user_id=user.id, participant_id=user.participant_id,
             session_id=sid, persona_id=req.persona_id,
             embedding_model=settings.embedding_model, latency_ms=round(elapsed),
             error_type=type(e).__name__,
@@ -238,7 +238,7 @@ async def retrieve_context(
 
     # Metadata only — the query is what the student asked, so it stays out.
     audit(
-        "ai.retrieve", "failure" if errors else "success", actor_user_id=user.id,
+        "ai.retrieve", "failure" if errors else "success", actor_user_id=user.id, participant_id=user.participant_id,
         session_id=sid, persona_id=req.persona_id,
         embedding_model=settings.embedding_model,
         latency_ms=round((perf_counter() - started) * 1000),
@@ -265,9 +265,9 @@ async def append_transcript(
     # Someone else's session is indistinguishable from a nonexistent one, so a
     # valid id cannot be confirmed by probing. persist() re-checks ownership on
     # the write itself, which is what makes the gap between here and there safe.
-    session = await InterviewSession.load(sid, user.id)
+    session = await InterviewSession.load(sid, user.participant_id)
     if session is None:
-        deny_session_access(sid, user.id, await InterviewSession.owner_of(sid))
+        deny_session_access(sid, user, await InterviewSession.owner_of(sid))
 
     text = req.text.strip()
     if text:

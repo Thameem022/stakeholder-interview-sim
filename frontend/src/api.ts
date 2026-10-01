@@ -85,14 +85,29 @@ export interface RealtimeToken {
   model: string
 }
 
+export interface PreSessionNotice {
+  version: string
+  title: string
+  points: string[]
+  acknowledgement: string
+}
+
+/** The canonical notice text; the server rejects a start without its version. */
+export const getNotice = async (): Promise<PreSessionNotice> => {
+  const { data } = await apiClient.get('/api/realtime/notice')
+  return data
+}
+
 /** The server always allocates the session id; there is no way to ask for one. */
 export const getRealtimeToken = async (
   personaId: string,
+  noticeVersion: string,
   voiceId?: string
 ): Promise<RealtimeToken> => {
   const { data } = await apiClient.post('/api/realtime/token', {
     persona_id: personaId,
     voice_id: voiceId,
+    notice_version: noticeVersion,
   })
   return data
 }
