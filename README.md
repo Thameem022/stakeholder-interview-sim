@@ -2,8 +2,10 @@
 
 AI-powered stakeholder interview simulator for the Harbortown / Global Lab
 educational program. A signed-in student picks one of four stakeholder
-personas, interviews them by speaking naturally in the browser, ends the
-interview, and receives a rubric-scored report (IQR + SIC).
+personas, interviews them by speaking naturally in the browser — or in
+writing, with no microphone — ends the interview, and receives a rubric-scored
+report (IQR + SIC). The personas and the feedback are AI-generated, for
+practice only, and play no part in grading.
 
 Repo name is `stakeholder-interview-sim`; the deployed product name is
 **Stakeholder Engagement Simulator**
@@ -32,14 +34,17 @@ Nova Sonic voices available to the AWS account and region before go-live.
   holds an AI credential.
   - **Live voice persona** — Amazon **Nova Sonic** over a bidirectional stream.
     The backend is in the audio path: browser ↔ SES (WebSocket) ↔ Bedrock.
+  - **Written persona** — the same persona prompt and `retrieve_context` tool,
+    played by **Claude Opus 5.5** (Sonnet 5.5 on a refusal) for typed
+    interviews. See [Written interviews](#written-interviews-and-accessibility).
   - **Retrieval** — PostgreSQL + pgvector over **Titan Text Embeddings V2**
     (1024 dimensions).
   - **Scoring** — IQR + SIC on **Claude Opus 5.5** through the official
     Anthropic SDK's Bedrock client, falling back to **Claude Sonnet 5.5** on a
     refusal or transient error. Fixed `effort`, schema-validated JSON, and the
     IQR overall score computed in code.
-  - **Guardrails** — Bedrock Guardrails on persona speech, student turns and
-    feedback.
+  - **Guardrails** — Bedrock Guardrails on persona replies (spoken or typed),
+    student turns and feedback.
   - AWS credentials come only from the standard chain (role / STS / IAM Roles
     Anywhere / vault), never from `.env` or source.
 - **Auth** — Microsoft Entra ID single sign-on (OIDC + PKCE), then an app
@@ -79,6 +84,42 @@ The persona cannot be interrupted. The browser stops sending microphone
 frames from the moment a persona reply starts until its audio has finished
 playing (plus a 300 ms tail), so playback bleed, background noise or an early
 start never reaches the model mid-reply. Replies need no push-to-talk button.
+
+## Written interviews and accessibility
+
+SR-2026-052 items 2.1 / 2.2. Before each interview the student chooses
+**Speak** or **Write**. Writing needs no microphone, no request and no
+approval: it is there for students who are deaf or hard of hearing, have a
+speech disability, have no quiet place to talk, or simply prefer it.
+
+- **Same assignment.** Same persona prompt (plus a note that the conversation
+  is written), same retrieval tool, same pre-session notice, guardrails, time
+  limit and audit trail. Both modes write the same transcript to
+  `interview_sessions.transcript` and are scored by the same `/api/eval/iqr`;
+  a test holds a typed and a spoken interview with the same words to
+  identical judge inputs and identical scores. The mode is recorded in
+  `interview_sessions.mode` for the pilot's comparison and nothing else.
+- **Keyboard and screen reader.** The whole flow — choosing a persona and a
+  mode, the notice, the conversation, ending it and reading the feedback —
+  works from the keyboard alone. The message box is labelled and keeps focus
+  between turns (Enter sends, Shift+Enter adds a line); the conversation is a
+  focusable `log` region that announces each reply; a status line says when
+  the stakeholder is replying; focus moves to each new step and to the top of
+  the report. The target is **WCAG 2.1 AA**.
+- **AI-generated, not graded.** The persona chooser, the interview page, the
+  pre-session notice and the score report all say that the stakeholder and the
+  feedback are AI-generated, for practice only, and do not affect grades.
+  Nothing in SES writes to a gradebook or LMS; a test scans the code for any
+  grade-passback integration.
+
+**Accommodation path.** A student who needs something neither mode provides
+(more than the `REALTIME_MAX_SESSION_MINUTES` time limit in one sitting, a
+different format, assistive technology that does not work with the page)
+contacts the course instructor, who arranges it with the Office of
+Accessibility Services. Holding more than one interview with the same persona
+is always allowed. Before go-live, the accessibility office should review the
+written mode with a screen reader (NVDA or JAWS, and VoiceOver) — the code
+targets AA but has not had that review.
 
 ## Local development
 
@@ -150,7 +191,9 @@ production refuses to start with any authority but Microsoft's.
 | `BEDROCK_ENRICHMENT_MODEL` | No | Model for the cosmetic coverage text (default `anthropic.claude-sonnet-5-5`) |
 | `BEDROCK_EMBEDDING_MODEL_ID` / `BEDROCK_EMBEDDING_DIMENSIONS` | No | `amazon.titan-embed-text-v2:0` / `1024`. The dimension must match the pgvector columns |
 | `BEDROCK_SPEECH_MODEL_ID` | No | Nova Sonic model id (default `amazon.nova-sonic-v1:0`) |
-| `NOVA_SONIC_STREAM_RENEW_SECONDS`, `REALTIME_MAX_SESSION_MINUTES` | No | Stream renewal age (420 s) and interview time limit (30 min) |
+| `NOVA_SONIC_STREAM_RENEW_SECONDS`, `REALTIME_MAX_SESSION_MINUTES` | No | Stream renewal age (420 s) and interview time limit (30 min, both modes) |
+| `BEDROCK_TEXT_PERSONA_MODEL` / `BEDROCK_TEXT_PERSONA_FALLBACK_MODEL` | No | The written-interview persona: `anthropic.claude-opus-5-5` / `anthropic.claude-sonnet-5-5` |
+| `BEDROCK_TEXT_PERSONA_EFFORT` | No | Claude effort for persona replies (default `low`: conversational, fast) |
 | `BEDROCK_GUARDRAIL_ID` / `BEDROCK_GUARDRAIL_VERSION` | Prod | Required in production |
 | `PORT` | No | Defaults to `8000` |
 | `AUTH_EMAIL_DOMAIN` | No | Institutional domain a signed-in address must have (`wpi.edu`) |
@@ -172,6 +215,8 @@ Authenticated (declared once in `main.py`, not per route):
 `POST /api/realtime/retrieve`, `POST /api/realtime/transcript`,
 `WebSocket /api/realtime/stream` (authenticates itself: cookie, Origin,
 single-use stream token),
+`POST /api/realtime/text/start`, `POST /api/realtime/text/{session_id}/turns`,
+`POST /api/realtime/text/{session_id}/end` (the written interview),
 `POST /api/eval/iqr`, `POST /api/eval/sic`,
 `GET /api/eval/sessions/{session_id}/latest`.
 
@@ -269,12 +314,14 @@ before inserting) and loads ~2,137 persona chunks and 114 world chunks.
 cd backend && uv run pytest
 ```
 
-Coverage is currently auth and authorization only (`tests/test_auth.py`,
-`tests/test_authz.py`). The realtime, RAG, and scoring paths have no
-automated coverage. There is no CI workflow in this repo.
+Tests need a PostgreSQL database with the migrations applied (point
+`DATABASE_URL` at a throwaway one, never at real data). Bedrock (Claude, Nova
+Sonic, Titan, Guardrails) and Entra are faked in-process, so no cloud access
+is needed. There is no CI workflow in this repo.
 
-Frontend: `npm run typecheck` and `npm run lint`. Vitest is configured
-(`npm run test`) but no frontend test files exist yet.
+Frontend: `npm run typecheck`, `npm run lint` and `npm run test` (Vitest +
+jsdom; the written interview's keyboard behaviour and the report's
+AI-generated notice).
 
 ## Production deployment
 
@@ -316,13 +363,13 @@ stakeholder-interview-sim/
 │   ├── app/
 │   │   ├── main.py, config.py, db.py, vector_store.py
 │   │   ├── ai/              (Bedrock: Claude client, Titan, Guardrails, AWS credentials)
-│   │   ├── realtime/        (stream token, Nova Sonic proxy, RAG, session state)
+│   │   ├── realtime/        (stream token, Nova Sonic proxy, written interview, RAG, session state)
 │   │   ├── auth/            (Entra OIDC, sessions, CSRF, rate limits, dependencies)
 │   │   ├── rag/             (persona dossier/facts chunking)
 │   │   ├── personas/        (prompts, configs, dossiers, voices, assembly)
 │   │   ├── evaluation/      (iqr_scorer, sic_scorer, prompts, sic_keys)
 │   │   └── api/             (health, auth, personas, eval routers)
-│   ├── alembic/versions/    (0001 … 0011)
+│   ├── alembic/versions/    (0001 … 0012)
 │   ├── scripts/             (embed_and_load.py, build_world_chunks.py, …)
 │   └── tests/               (pytest; Bedrock and Entra are faked in-process)
 ├── frontend/
@@ -332,7 +379,7 @@ stakeholder-interview-sim/
 │       ├── auth/            (AuthContext, sign-in landing, RequireAuth, sso)
 │       ├── realtime/streamSession.ts
 │       ├── hooks/useRealtimeSession.ts
-│       └── components/      (Avatar, Header, Controls, …)
+│       └── components/      (Avatar, Header, TextInterview, AiNotice, …)
 ├── deploy/
 │   ├── WPI_DEPLOY.md
 │   ├── systemd/stakeholder-engagement-simulator.service

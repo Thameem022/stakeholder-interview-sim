@@ -1,8 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Route, Routes, useNavigate } from 'react-router-dom'
-import { Avatar, Header, PreSessionNotice, ResearchConsentCard } from './components'
+import { AiNotice, Avatar, Header, PreSessionNotice, ResearchConsentCard, TextInterview } from './components'
 import { useRealtimeSession } from './hooks/useRealtimeSession'
-import { Persona, ResearchConsent, evalIqr, getPersonas, getResearchConsent } from './api'
+import {
+  Persona,
+  ResearchConsent,
+  endTextInterview,
+  evalIqr,
+  getPersonas,
+  getResearchConsent,
+  startTextInterview,
+} from './api'
 import { personaMeta } from './personas'
 import ScorePage from './ScorePage'
 import { AuthProvider, useAuth } from './auth/AuthContext'
@@ -98,6 +106,12 @@ function InterviewView() {
   // first interview, only while research is open. Never shown to anyone else.
   const [consent, setConsent] = useState<ResearchConsent | null>(null)
   const [changingConsent, setChangingConsent] = useState(false)
+  // Voice or a written (typed) interview — same stakeholder, same scoring.
+  const [mode, setMode] = useState<'voice' | 'text'>('voice')
+  const [textSessionId, setTextSessionId] = useState<string | null>(null)
+  const [textStarting, setTextStarting] = useState(false)
+  const [textError, setTextError] = useState('')
+  const interviewHeadingRef = useRef<HTMLHeadingElement>(null)
   const navigate = useNavigate()
   const { refresh } = useAuth()
 
@@ -119,6 +133,12 @@ function InterviewView() {
 
   const consentPending = !!consent?.enabled && consent.consented === null
 
+  // The persona card that had focus is gone once one is chosen; move focus to
+  // the new step rather than dropping keyboard users back at the top.
+  useEffect(() => {
+    if (selected) interviewHeadingRef.current?.focus()
+  }, [selected])
+
   const session = useRealtimeSession({
     personaId: selected,
     // The interview's background calls opt out of the global redirect so the
@@ -130,9 +150,34 @@ function InterviewView() {
     },
   })
 
+  const startText = async (noticeVersion: string) => {
+    setTextStarting(true)
+    setTextError('')
+    try {
+      const { session_id } = await startTextInterview(selected, noticeVersion)
+      setTextSessionId(session_id)
+    } catch (e: any) {
+      if (e?.response?.status === 401) return
+      setTextError('Could not start the interview. Please try again.')
+    } finally {
+      setTextStarting(false)
+    }
+  }
+
   const handleEnd = async () => {
-    const sid = session.sessionId
-    session.end()
+    const sid = textSessionId ?? session.sessionId
+    if (textSessionId) {
+      setScoring(true)
+      try {
+        await endTextInterview(textSessionId)
+      } catch (e: any) {
+        if (e?.response?.status === 401) return
+        // Ending only stamps the time; scoring reads the saved transcript
+        // either way, so carry on.
+      }
+    } else {
+      session.end()
+    }
     if (!sid) return
     setScoring(true)
     setScoringError('')
@@ -162,10 +207,14 @@ function InterviewView() {
     if (session.status !== 'idle') session.end()
     setSelected('')
     setScoring(false)
+    setTextSessionId(null)
+    setTextError('')
   }
 
   const personaName = personas.find((p) => p.key === selected)?.display_name || selected
-  const showViewScore = !!session.sessionId && session.status === 'idle' && !scoring
+  const showViewScore =
+    !textSessionId && !!session.sessionId && session.status === 'idle' && !scoring
+  const interviewActive = !!textSessionId || session.status !== 'idle' || textStarting
 
   return (
     <div className="min-h-screen bg-white">
@@ -213,6 +262,7 @@ function InterviewView() {
                 )}
               </div>
             </div>
+            <AiNotice className="mt-4" />
             <div className="mt-4 h-px bg-line-soft" />
 
             {personasError ? (
@@ -234,7 +284,11 @@ function InterviewView() {
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div className="min-w-0">
                 <StepKicker>Step 2 of 2</StepKicker>
-                <h2 className="mt-1.5 text-[26px] font-semibold tracking-[-0.01em] text-ink lg:text-[32px]">
+                <h2
+                  ref={interviewHeadingRef}
+                  tabIndex={-1}
+                  className="mt-1.5 text-[26px] font-semibold tracking-[-0.01em] text-ink outline-none lg:text-[32px]"
+                >
                   Interview with {personaName}
                 </h2>
               </div>
@@ -257,6 +311,8 @@ function InterviewView() {
               </div>
             </div>
 
+            <AiNotice className="mt-4" />
+
             <Avatar
               audioStream={session.remoteStream}
               active={session.status === 'live'}
@@ -264,8 +320,47 @@ function InterviewView() {
               personaName={personaName}
             />
 
+            {!interviewActive && (
+              <fieldset className="mx-auto mt-4 max-w-[560px]">
+                <legend className="text-[13.5px] font-semibold text-ink">
+                  How would you like to hold this interview?
+                </legend>
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {(
+                    [
+                      ['voice', 'Speak', 'Talk with a microphone.'],
+                      ['text', 'Write', 'Type your questions — no microphone needed.'],
+                    ] as const
+                  ).map(([value, label, hint]) => (
+                    <label
+                      key={value}
+                      className={`flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2.5 focus-within:ring-2 focus-within:ring-brand ${
+                        mode === value ? 'border-brand bg-primary-50' : 'border-line'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="interview-mode"
+                        value={value}
+                        checked={mode === value}
+                        onChange={() => setMode(value)}
+                        className="mt-1 accent-brand"
+                      />
+                      <span>
+                        <span className="block text-[14px] font-semibold text-ink">{label}</span>
+                        <span className="block text-[12.5px] text-muted">{hint}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-2 text-[12px] text-muted-soft">
+                  Both are scored the same way.
+                </p>
+              </fieldset>
+            )}
+
             <div className="my-4 flex justify-center gap-3">
-              {session.status === 'idle' && (
+              {!interviewActive && (
                 <button
                   onClick={() => setShowNotice(true)}
                   className="h-[46px] rounded-lg bg-brand px-8 text-[12.5px] font-semibold uppercase tracking-[0.1em] text-white transition-colors hover:bg-brand-hover"
@@ -287,45 +382,62 @@ function InterviewView() {
                   {scoring ? 'Scoring…' : 'End interview'}
                 </button>
               )}
-              {session.status !== 'live' && scoring && (
+              {textStarting && (
+                <div className="flex h-[46px] items-center text-[14px] text-muted">
+                  Starting…
+                </div>
+              )}
+              {session.status !== 'live' && !textSessionId && scoring && (
                 <div className="flex h-[46px] items-center text-[14px] text-muted">
                   Scoring interview…
                 </div>
               )}
             </div>
 
-            <div className="mt-6 grid grid-cols-1 gap-4">
-              <div className="rounded-lg border border-line bg-white p-4">
-                <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.11em] text-muted-soft">
-                  You said
-                </h3>
-                <p className="text-[14.5px] leading-relaxed text-ink">
-                  {session.userTranscript || '—'}
-                </p>
+            {textSessionId ? (
+              <TextInterview
+                sessionId={textSessionId}
+                personaName={personaName}
+                onEnd={handleEnd}
+                ending={scoring}
+              />
+            ) : mode === 'voice' ? (
+              <div className="mt-6 grid grid-cols-1 gap-4">
+                <div className="rounded-lg border border-line bg-white p-4">
+                  <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.11em] text-muted-soft">
+                    You said
+                  </h3>
+                  <p className="text-[14.5px] leading-relaxed text-ink">
+                    {session.userTranscript || '—'}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-line bg-white p-4">
+                  <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.11em] text-muted-soft">
+                    {personaName} said
+                  </h3>
+                  <p className="text-[14.5px] leading-relaxed text-ink">
+                    {session.assistantTranscript || '—'}
+                  </p>
+                </div>
               </div>
-              <div className="rounded-lg border border-line bg-white p-4">
-                <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.11em] text-muted-soft">
-                  {personaName} said
-                </h3>
-                <p className="text-[14.5px] leading-relaxed text-ink">
-                  {session.assistantTranscript || '—'}
-                </p>
-              </div>
-            </div>
+            ) : null}
 
             {showNotice && (
               <PreSessionNotice
                 onCancel={() => setShowNotice(false)}
                 onAcknowledge={(version) => {
                   setShowNotice(false)
-                  void session.start(version)
+                  void (mode === 'text' ? startText(version) : session.start(version))
                 }}
               />
             )}
 
-            {(session.error || scoringError) && (
-              <div className="mt-4 border-l-[3px] border-danger bg-danger-bg px-3.5 py-3 text-[13.5px] leading-[1.5] text-danger">
-                {scoringError || session.error}
+            {(session.error || scoringError || textError) && (
+              <div
+                role="alert"
+                className="mt-4 border-l-[3px] border-danger bg-danger-bg px-3.5 py-3 text-[13.5px] leading-[1.5] text-danger"
+              >
+                {scoringError || textError || session.error}
               </div>
             )}
           </>

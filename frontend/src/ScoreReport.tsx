@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react';
 
+import { AiNotice } from './components/AiNotice';
 import HowYouInterviewed from './score/HowYouInterviewed';
 import WhatYouLearned from './score/WhatYouLearned';
 import { MONO, PAGE_MAX, T } from './score/theme';
@@ -69,6 +70,14 @@ type Tab = 'interview' | 'learned';
 export default function ScoreReport({ evaluation, onClose, sessionId }: ScoreReportProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('interview');
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  // Arriving from the interview, the page would keep that page's scroll
+  // position and leave focus on <body>. Start at the top, on the report.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    headingRef.current?.focus();
+  }, []);
 
   const turns = (evaluation.metadata as { turns?: Array<{ turn_id: number; speaker: string; text: string }> })?.turns;
   const coverage = evaluation.insight_coverage;
@@ -92,6 +101,10 @@ export default function ScoreReport({ evaluation, onClose, sessionId }: ScoreRep
         margin: '0 auto',
         padding: '2rem clamp(1rem, 3vw, 2.5rem) 4rem',
       }}>
+
+        <h1 ref={headingRef} tabIndex={-1} className="sr-only">
+          Feedback on your interview with {persona.fullName}
+        </h1>
 
         <button
           onClick={() => (onClose ? onClose() : navigate('/'))}
@@ -140,6 +153,9 @@ export default function ScoreReport({ evaluation, onClose, sessionId }: ScoreRep
             </span>
           )}
         </div>
+
+        {/* SR-2026-052 item 2.2: said where the feedback is read. */}
+        <AiNotice className="mb-5" />
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, marginBottom: '1.5rem', flexWrap: 'wrap' }}>

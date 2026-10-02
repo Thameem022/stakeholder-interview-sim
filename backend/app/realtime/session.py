@@ -33,6 +33,9 @@ class InterviewSession:
     started_at: datetime
     # Which pre-session notice the student acknowledged before this interview.
     notice_version: Optional[str] = None
+    # "voice" (Nova Sonic) or "text" (written chat). Same transcript, same scoring.
+    mode: str = "voice"
+    ended_at: Optional[datetime] = None
     turns: List[Turn] = field(default_factory=list)
 
     def add_turn(self, role: str, text: str) -> None:
@@ -54,9 +57,9 @@ class InterviewSession:
                 """
                 INSERT INTO interview_sessions
                     (id, participant_id, persona_id, voice_id, started_at, transcript,
-                     notice_version, notice_acknowledged_at)
+                     notice_version, notice_acknowledged_at, mode)
                 VALUES ($1, $2, $3, $4, $5, '[]'::jsonb, $6,
-                        CASE WHEN $6::text IS NULL THEN NULL ELSE now() END)
+                        CASE WHEN $6::text IS NULL THEN NULL ELSE now() END, $7)
                 """,
                 self.id,
                 self.participant_id,
@@ -64,6 +67,7 @@ class InterviewSession:
                 self.voice_id,
                 self.started_at,
                 self.notice_version,
+                self.mode,
             )
 
     async def persist(self, ended: bool = False) -> None:
@@ -123,7 +127,7 @@ class InterviewSession:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                SELECT id, participant_id, persona_id, voice_id, started_at, transcript
+                SELECT id, participant_id, persona_id, voice_id, started_at, transcript, mode, ended_at
                 FROM interview_sessions
                 WHERE id = $1 AND participant_id = $2
                 """,
@@ -150,5 +154,7 @@ class InterviewSession:
             persona_id=row["persona_id"],
             voice_id=row["voice_id"] or "",
             started_at=row["started_at"],
+            mode=row["mode"],
+            ended_at=row["ended_at"],
             turns=turns,
         )

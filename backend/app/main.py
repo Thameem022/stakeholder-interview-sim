@@ -38,6 +38,7 @@ from app.observability.audit import configure_audit_logging
 from app.realtime.bedrock_proxy import router as realtime_stream_router
 from app.realtime.notice import router as realtime_notice_router
 from app.realtime.retrieve import router as realtime_retrieve_router
+from app.realtime.text_interview import router as realtime_text_router
 from app.realtime.token import router as realtime_token_router
 from app.research.consent import check_research_gate
 
@@ -86,6 +87,7 @@ app.include_router(eval_router, prefix="/api", dependencies=_authenticated)
 app.include_router(realtime_token_router, prefix="/api", dependencies=_authenticated)
 app.include_router(realtime_notice_router, prefix="/api", dependencies=_authenticated)
 app.include_router(realtime_retrieve_router, prefix="/api", dependencies=_authenticated)
+app.include_router(realtime_text_router, prefix="/api", dependencies=_authenticated)
 app.include_router(research_router, prefix="/api", dependencies=_authenticated)
 app.include_router(incidents_router, prefix="/api", dependencies=_authenticated)
 app.include_router(export_router, prefix="/api", dependencies=_authenticated)

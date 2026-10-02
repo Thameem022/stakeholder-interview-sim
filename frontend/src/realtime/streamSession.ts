@@ -265,7 +265,9 @@ export class RealtimeStreamSession {
     this.unmuteTimer = null
     try {
       this.ws?.close()
-    } catch {}
+    } catch {
+      // Already closed or never opened — nothing left to release.
+    }
     this.captureNode?.port.close()
     this.micStream?.getTracks().forEach((t) => t.stop())
     for (const ctx of [this.captureCtx, this.playCtx]) {

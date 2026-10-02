@@ -60,23 +60,21 @@ def hash_stream_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-@router.post(
-    "/realtime/token",
-    response_model=TokenResponse,
-    dependencies=[Depends(rate_limited(*_TOKEN_LIMIT))],
-)
-async def mint_token(
-    req: TokenRequest, user: Annotated[CurrentUser, Depends(require_user)]
-) -> TokenResponse:
-    if not req.persona_id:
-        raise HTTPException(status_code=400, detail="persona_id required")
+async def start_session(
+    user: CurrentUser, persona_id: str, notice_version: Optional[str], *,
+    mode: str, voice_id: str,
+) -> InterviewSession:
+    """Create a new interview for the caller — voice or text alike.
 
-    # Enforced here, not just in the UI: no session row, no token, until the
-    # current notice has been acknowledged.
-    if req.notice_version != NOTICE_VERSION:
+    The notice is enforced here, not just in the UI: no session row exists
+    until the current notice version has been acknowledged.
+    """
+    if not persona_id:
+        raise HTTPException(status_code=400, detail="persona_id required")
+    if notice_version != NOTICE_VERSION:
         audit(
             "interview.notice", "denied", actor_user_id=user.id,
-            participant_id=user.participant_id, presented_version=req.notice_version,
+            participant_id=user.participant_id, presented_version=notice_version,
         )
         raise HTTPException(
             status_code=status.HTTP_428_PRECONDITION_REQUIRED,
@@ -86,21 +84,34 @@ async def mint_token(
                 "notice_version": NOTICE_VERSION,
             },
         )
+    session = InterviewSession(
+        id=uuid4(),
+        participant_id=user.participant_id,
+        notice_version=notice_version,
+        persona_id=persona_id,
+        voice_id=voice_id,
+        started_at=datetime.now(timezone.utc),
+        mode=mode,
+    )
+    await session.create()
+    return session
 
+
+@router.post(
+    "/realtime/token",
+    response_model=TokenResponse,
+    dependencies=[Depends(rate_limited(*_TOKEN_LIMIT))],
+)
+async def mint_token(
+    req: TokenRequest, user: Annotated[CurrentUser, Depends(require_user)]
+) -> TokenResponse:
     # Only voices this deployment has chosen; a client cannot name others.
     persona_voice = VOICE_MAP.get(req.persona_id, DEFAULT_VOICE)
     voice_id = req.voice_id if req.voice_id in set(VOICE_MAP.values()) else persona_voice
-
-    sid = uuid4()
-    session = InterviewSession(
-        id=sid,
-        participant_id=user.participant_id,
-        notice_version=req.notice_version,
-        persona_id=req.persona_id,
-        voice_id=voice_id,
-        started_at=datetime.now(timezone.utc),
+    session = await start_session(
+        user, req.persona_id, req.notice_version, mode="voice", voice_id=voice_id
     )
-    await session.create()
+    sid = session.id
 
     token = secrets.token_urlsafe(32)
     pool = await get_pool()

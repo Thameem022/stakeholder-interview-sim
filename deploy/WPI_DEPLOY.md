@@ -206,7 +206,7 @@ never production credentials.
    {
      "Version": "2012-10-17",
      "Statement": [
-       { "Sid": "ClaudeScoring", "Effect": "Allow",
+       { "Sid": "ClaudeScoringAndWrittenPersona", "Effect": "Allow",
          "Action": "bedrock-mantle:CreateInference",
          "Resource": ["<ARN of anthropic.claude-opus-5-5>", "<ARN of anthropic.claude-sonnet-5-5>"] },
        { "Sid": "TitanEmbeddings", "Effect": "Allow",

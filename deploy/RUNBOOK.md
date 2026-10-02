@@ -22,7 +22,7 @@ roles only.
 ## How incidents reach you
 
 - **A session flag.** Students can flag their own session, instructors can flag
-  any session, and Bedrock Guardrails flag automatically (persona speech that trips the guardrail also ends the interview; harmful feedback is withheld). Every
+  any session, and Bedrock Guardrails flag automatically (a persona reply that trips the guardrail also ends the interview — in a written interview the reply is withheld and never stored; harmful feedback is withheld). Every
   flag emits the audit event `incident.session_flagged` with `severity: high`.
   The SIEM alert rule on that event pages the Support Owner. The event names
   the session, reason and source but never the note or any transcript text.
@@ -80,8 +80,10 @@ id and the flag id.
    unsafe advice, or seriously off-scenario).
 2. Tell the **Study PIs**, who decide on an **IRB** adverse-event report.
 3. Note which persona and which prompt/model versions were involved. The
-   `ai.realtime_session` and `ai.scoring` audit events for the session carry
-   the model and prompt versions. Open a fix: a persona prompt or guardrail
+   `ai.realtime_session` (voice), `ai.text_turn` (written) and `ai.scoring`
+   audit events for the session carry the model and prompt versions; the
+   `ai.guardrail` event's `stage` says which (`live_output`, `text_output`,
+   `feedback`, ...). Open a fix: a persona prompt or guardrail
    change. A change of model or provider is an IRB and Information Security
    re-review trigger, so don't make one on your own.
 4. Purge the session if the content should not be kept. Otherwise mark it

@@ -38,7 +38,7 @@ export const Header: React.FC = () => {
                 Stakeholder Engagement Simulator
               </h1>
               <p className="mt-3 max-w-[460px] text-[14px] font-light leading-[1.6] text-white/90 lg:text-[15px]">
-                Voice-powered interviews with the Harbortown stakeholder personas.
+                Spoken or written interviews with the Harbortown stakeholder personas.
               </p>
             </div>
 

@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     # seconds, carrying the conversation over, at the next turn boundary.
     nova_sonic_stream_renew_seconds: int = 420
     realtime_max_session_minutes: int = 30
+    # Written interviews (SR-2026-052 item 2.1): the same persona, in a typed
+    # chat, played by Claude on Bedrock. Replies are conversational, so effort
+    # is low; a declined reply is retried on the fallback model.
+    bedrock_text_persona_model: str = "anthropic.claude-opus-5-5"
+    bedrock_text_persona_fallback_model: str = "anthropic.claude-sonnet-5-5"
+    bedrock_text_persona_effort: Literal["low", "medium", "high", "xhigh", "max"] = "low"
     # Bedrock Guardrails, applied to persona speech, student turns and feedback.
     # Required in production.
     bedrock_guardrail_id: str = ""

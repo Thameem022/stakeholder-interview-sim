@@ -139,6 +139,39 @@ export const getRealtimeToken = async (
   return data
 }
 
+// --- written interview (SR-2026-052 item 2.1) --------------------------------
+
+export interface TextTurnReply {
+  /** null when the server withheld the reply — `ended` says why. */
+  reply: string | null
+  ended: boolean
+  reason: 'guardrail' | 'time_limit' | null
+}
+
+export const startTextInterview = async (
+  personaId: string,
+  noticeVersion: string
+): Promise<{ session_id: string; persona_id: string }> => {
+  const { data } = await apiClient.post('/api/realtime/text/start', {
+    persona_id: personaId,
+    notice_version: noticeVersion,
+  })
+  return data
+}
+
+export const sendTextTurn = async (sessionId: string, text: string): Promise<TextTurnReply> => {
+  const { data } = await apiClient.post(
+    `/api/realtime/text/${encodeURIComponent(sessionId)}/turns`,
+    { text }
+  )
+  return data
+}
+
+export const endTextInterview = async (sessionId: string) => {
+  const { data } = await apiClient.post(`/api/realtime/text/${encodeURIComponent(sessionId)}/end`, {})
+  return data
+}
+
 // --- auth -------------------------------------------------------------------
 
 declare module 'axios' {
