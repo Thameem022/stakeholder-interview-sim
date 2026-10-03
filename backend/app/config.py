@@ -98,6 +98,15 @@ class Settings(BaseSettings):
     # retained under the protocol; the job never touches them).
     retention_research_until: str = ""
 
+    # Backups (SEC-BCK-001), taken daily by app/jobs/backup.py. Encrypted to
+    # BACKUP_PUBLIC_KEY (an OpenPGP public key file); the matching private key
+    # is held offline, never on this server. A backup is kept BACKUP_KEEP_DAYS,
+    # capped at the shortest retention window above, so nothing the retention
+    # job deletes survives in a backup for longer than that window again.
+    backup_dir: str = "/var/backups/stakeholder-engagement-simulator"
+    backup_public_key: str = ""
+    backup_keep_days: int = 14
+
     # Security audit events (JSON lines on the "ses.audit" logger). "stdout"
     # lands in the service journal; "syslog" sends to AUDIT_SYSLOG_ADDRESS (a
     # socket path, or host:port for a forwarder); "none" disables them.

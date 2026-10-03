@@ -129,10 +129,17 @@ const csrf = document.cookie.match(/(?:^|; )(?:__Host-)?sis_csrf=([^;]+)/)[1];
 await (await fetch(`/api/admin/flags/${FLAG_ID}/purge`, {method: 'POST', headers: {'X-CSRF-Token': csrf}})).json()
 ```
 
-**Backups.** A purge does not reach existing database backups. Purged content
-remains in backups until they expire under the retention schedule. Note the
-purge date on the incident. If a backup is ever restored, re-run the purges
-recorded since that backup was taken.
+**Backups.** A purge does not reach existing database backups. They are
+encrypted, and expire after `BACKUP_KEEP_DAYS` (14 by default, never longer than
+the shortest retention window), so purged content is gone from every backup by
+then. Note the purge date on the incident. If IRB or Information Security
+decide it cannot wait, delete the backup files taken before the purge
+(`/var/backups/stakeholder-engagement-simulator/`) and take a fresh one:
+`sudo systemctl start stakeholder-engagement-simulator-backup.service`. If a
+backup is ever restored, the restore procedure replays every purge since the
+backup from the audit log (`app.jobs.after_restore`; see
+[WPI_DEPLOY.md](WPI_DEPLOY.md#restoring-a-backup)), so a purged session cannot
+come back.
 
 ---
 

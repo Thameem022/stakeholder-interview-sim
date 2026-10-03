@@ -68,7 +68,7 @@ def notify_flag(
 
 
 async def purge_flagged_session(
-    conn: asyncpg.Connection, flag_id: UUID, purged_by: UUID
+    conn: asyncpg.Connection, flag_id: UUID, purged_by: Optional[UUID]
 ) -> Optional[dict]:
     """Purge the session a flag points at. None if the flag is unknown, already
     purged, or its session is gone. Everything happens in one transaction."""

@@ -2,8 +2,8 @@
 
 SR-2026-052 item 1.6: least-privilege, short-lived, server-only. Credentials
 come from botocore's standard chain — on the WPI VM that is an IAM Roles
-Anywhere `credential_process` profile or vault-issued STS credentials (Nutanix
-has no instance metadata service); in development, an SSO / assumed-role
+Anywhere `credential_process` profile or vault-issued STS credentials (the VM
+platform has no instance metadata service); in development, an SSO / assumed-role
 profile. botocore refreshes them before they expire. No access key is ever
 read from SES configuration, and none is ever sent to the browser.
 

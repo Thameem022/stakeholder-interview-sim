@@ -195,6 +195,8 @@ production refuses to start with any authority but Microsoft's.
 | `BEDROCK_TEXT_PERSONA_MODEL` / `BEDROCK_TEXT_PERSONA_FALLBACK_MODEL` | No | The written-interview persona: `anthropic.claude-opus-5-5` / `anthropic.claude-sonnet-5-5` |
 | `BEDROCK_TEXT_PERSONA_EFFORT` | No | Claude effort for persona replies (default `low`: conversational, fast) |
 | `BEDROCK_GUARDRAIL_ID` / `BEDROCK_GUARDRAIL_VERSION` | Prod | Required in production |
+| `BACKUP_PUBLIC_KEY` | Prod | OpenPGP public key the daily backups are encrypted to; the private half is held off the server |
+| `BACKUP_DIR` / `BACKUP_KEEP_DAYS` | No | Where backups go (`/var/backups/stakeholder-engagement-simulator`) and how long they stay (14 days, capped at the shortest retention window) |
 | `PORT` | No | Defaults to `8000` |
 | `AUTH_EMAIL_DOMAIN` | No | Institutional domain a signed-in address must have (`wpi.edu`) |
 | `AUTH_COOKIE_NAME` | No | Defaults to `sis_session` |
@@ -291,7 +293,9 @@ A daily job (`python -m app.jobs.retention`, systemd timer in `deploy/systemd/`)
 enforces the retention schedule configured by `RETENTION_*` in `.env`: course
 data and the identity mapping go a set period after term end, query telemetry
 on a short window, research data only at the protocol's end. Every run writes a
-`deletion_log` row. Students download their own transcripts and feedback as a
+`deletion_log` row. Backups follow the same schedule: they expire within the
+shortest retention window, and a restore replays the purges and research
+withdrawals made since the backup. Students download their own transcripts and feedback as a
 zip from the score report (`/api/export/...`); SES does no grading.
 
 **Audio is never stored by SES.** It streams from the browser to the AI service
@@ -330,6 +334,16 @@ AI-generated notice).
   `mod_proxy_http` and `mod_proxy_wstunnel` (the interview WebSocket). Outbound
   HTTPS to Entra ID and the AWS Bedrock endpoints must be permitted. AWS
   credentials come from IAM Roles Anywhere or the vault.
+- **TLS and headers** — TLS 1.2 minimum with AEAD ciphers only, TLS 1.3
+  preferred, HSTS and a Content-Security-Policy, all in the Apache vhost;
+  `deploy/check_tls.sh` scans what is live (and SES's own TLS to Bedrock).
+- **Backups** — `python -m app.jobs.backup` (daily systemd timer): `pg_dump`
+  encrypted with AES-256 to a public key, so the server cannot read its own
+  backups, and expired on the retention schedule. Restore with
+  `deploy/backup/ses-restore.sh` into a new database, then
+  `python -m app.jobs.after_restore` replays the purges and withdrawals since the
+  backup. Procedure in [deploy/WPI_DEPLOY.md](deploy/WPI_DEPLOY.md).
+- **Email** — SES sends none (a test enforces it).
 - **Container image** (root `Dockerfile`): supply `DATABASE_URL`,
   `ENVIRONMENT`, the Entra variables and AWS credentials from the platform's
   role or secret store, then deploy the image.

@@ -35,6 +35,8 @@ Deploy this repo to the WPI Ubuntu VM that also hosts `interviewsimulator.wpi.ed
 /etc/systemd/system/stakeholder-engagement-simulator.service
 /etc/apache2/sites-available/stakeholder-engagement-simulator.conf
 ~/stakeholder-engagement-simulator-upload/              temporary upload staging area
+/etc/stakeholder-engagement-simulator/backup-public-key.asc   backup encryption key (public half only)
+/var/backups/stakeholder-engagement-simulator/          encrypted daily backups (mode 700)
 ```
 
 ---
@@ -145,6 +147,7 @@ AWS_REGION=us-east-1
 AWS_PROFILE=ses-bedrock            # the credential_process profile from step 7b
 BEDROCK_GUARDRAIL_ID=<guardrail-id>
 BEDROCK_GUARDRAIL_VERSION=<numbered version, not DRAFT>
+BACKUP_PUBLIC_KEY=/etc/stakeholder-engagement-simulator/backup-public-key.asc   # see "Backups and restore"
 ```
 
 There is **no AI key in this file**. AWS credentials are short-lived and come
@@ -221,8 +224,8 @@ never production credentials.
      ]
    }
    ```
-3. **Credential delivery.** The VM is on Nutanix, which has no EC2 instance
-   metadata, so use **IAM Roles Anywhere** (an X.509 certificate from a WPI CA
+3. **Credential delivery.** The VM runs on the institution's virtualization
+   platform, which has no EC2 instance metadata, so use **IAM Roles Anywhere** (an X.509 certificate from a WPI CA
    is exchanged for STS credentials), or vault-issued STS credentials. Either
    way it plugs into the standard AWS chain as a `credential_process` profile.
    For the service user's `~/.aws/config`:
@@ -360,7 +363,7 @@ curl http://127.0.0.1:8001/api/health
 sudo cp /opt/stakeholder-engagement-simulator/deploy/apache/stakeholder-engagement-simulator.conf \
         /etc/apache2/sites-available/stakeholder-engagement-simulator.conf
 
-sudo a2enmod proxy proxy_http headers rewrite ssl
+sudo a2enmod proxy proxy_http proxy_wstunnel headers rewrite ssl
 sudo a2ensite stakeholder-engagement-simulator.conf
 sudo apachectl configtest
 sudo systemctl reload apache2
@@ -375,6 +378,12 @@ Full verify:
 
 ```bash
 curl https://stakeholder-engagement-simulator.wpi.edu/api/health
+```
+
+Scan TLS and the security headers (see [Encryption](#encryption-sr-2026-052-item-23-sec-enc-001)):
+
+```bash
+/opt/stakeholder-engagement-simulator/deploy/check_tls.sh            # expect RESULT: ok
 ```
 
 Open `https://stakeholder-engagement-simulator.wpi.edu/` in a browser, pick a persona, run a short interview, press End, and confirm the score page renders both IQR and SIC panels.
@@ -584,14 +593,12 @@ sudo journalctl -u stakeholder-engagement-simulator-retention -n 50 --no-pager
 psql ... -c "SELECT started_at, status, counts FROM deletion_log ORDER BY started_at DESC LIMIT 5;"
 ```
 
-**Backups must expire on the same schedule** (SEC-RET-001: "backups expire on
-the same schedule"). Backup retention is deployment configuration, not code:
-set the backup rotation so that no backup outlives
-`RETENTION_COURSE_GRACE_DAYS` after the term end. In practice, keep daily
-backups for no longer than the grace period. Otherwise deleted course data
-survives in backups. Record the rotation setting in the solution document.
-Purges done through incident flags have the same backup caveat (see
-[RUNBOOK.md](RUNBOOK.md#purging-a-flagged-session)).
+**Backups expire on the same schedule** (SEC-RET-001). The backup job deletes
+backups older than `BACKUP_KEEP_DAYS`, and never keeps one longer than the
+shortest retention window above. So data the retention job deletes is gone from
+backups within that window as well. Restoring an older backup is followed by a
+replay of the purges and withdrawals since it was taken; see
+[Backups and restore](#backups-and-restore-sr-2026-052-item-32-sec-bck-001).
 
 ### Security audit events
 
@@ -623,6 +630,143 @@ institution's SIEM (point the local syslog forwarder, or `AUDIT_SYSLOG_ADDRESS`,
 at the collector it provides), retention of at least 12 months there, and
 cloud-provider audit logging for the AI account. None of the endpoint details
 belong in this repository.
+
+## Encryption (SR-2026-052 item 2.3, SEC-ENC-001)
+
+### In transit
+
+| Hop | Protection |
+|---|---|
+| Browser ↔ Apache | TLS 1.2 minimum with AEAD ciphers only (ECDHE + AES-GCM / ChaCha20-Poly1305), TLS 1.3 preferred; HSTS (two years) and security headers. All in `deploy/apache/`. |
+| Apache ↔ uvicorn | Loopback (`127.0.0.1:8001`); never leaves the VM. |
+| SES ↔ PostgreSQL | Loopback (`127.0.0.1:5432`); never leaves the VM. |
+| SES ↔ Amazon Bedrock | TLS 1.3. The AWS endpoints support it and Python 3.12 on OpenSSL 3 negotiates the highest version both sides offer; the check below confirms it from the VM. |
+| SES ↔ Entra ID | HTTPS. |
+
+After installing or changing the vhost, and after any Apache or OpenSSL upgrade:
+
+```bash
+sudo apachectl configtest                                        # Syntax OK
+/opt/stakeholder-engagement-simulator/deploy/check_tls.sh       # what the site accepts
+/opt/stakeholder-engagement-simulator/deploy/check_tls.sh --bedrock us-east-1   # SES's own TLS to Bedrock
+```
+
+The first scan expects:
+- TLS 1.0 and 1.1 refused;
+- TLS 1.3 negotiated by default;
+- every TLS 1.2 cipher it accepts is AEAD;
+- HSTS and a Content-Security-Policy on the response.
+
+The second expects `TLSv1.3` for `bedrock-runtime.<region>.amazonaws.com` and `bedrock-mantle.<region>.api.aws`. Both print `RESULT: ok`, or name what is wrong and exit non-zero. An external scanner shows the same thing, for example `nmap --script ssl-enum-ciphers -p 443 stakeholder-engagement-simulator.wpi.edu`, which should list only TLSv1.2 ECDHE suites with GCM or CHACHA20-POLY1305, and TLSv1.3.
+
+The TLS settings sit in this site's vhost, so the old app's vhost on the same host keeps its own. That per-vhost behaviour needs Apache 2.4.42+ with OpenSSL 1.1.1+, which Ubuntu 22.04 and later have.
+
+### At rest (AES-256)
+
+PostgreSQL does not encrypt its own files; encryption at rest comes from the storage underneath.
+
+- **VM storage.** The infrastructure team must confirm, in writing, that data-at-rest encryption (AES-256) is on for the storage holding this VM's disks: the database, the logs and the backup directory. Record that confirmation in the solution document.
+- **If it cannot be confirmed,** put `/var/lib/postgresql` and the backup directory on LUKS2 volumes (`aes-xts-plain64` with a 512-bit key, i.e. AES-256) and check them:
+  ```bash
+  lsblk -o NAME,TYPE,FSTYPE,MOUNTPOINT                  # encrypted volumes show TYPE "crypt"
+  findmnt -T /var/lib/postgresql
+  sudo cryptsetup status <mapping>                      # cipher: aes-xts-plain64, keysize: 512 bits
+  ```
+- **Backups** are encrypted by SES before they reach any storage (AES-256, OpenPGP; next section). They stay encrypted wherever they are copied.
+- Nothing else on disk holds interview content. Audio is never stored, and logs and audit events carry no transcript or feedback text.
+
+## Backups and restore (SR-2026-052 item 3.2, SEC-BCK-001)
+
+`app/jobs/backup.py` runs daily at 04:00 from `stakeholder-engagement-simulator-backup.timer`, after the 03:15 retention run.
+
+- **How it backs up.** `pg_dump --format=custom` is piped straight into `gpg` and encrypted with AES-256 to the backup public key. No plaintext dump touches the disk, and the VM cannot decrypt its own backups.
+- **What it writes.** One file per run in `BACKUP_DIR`, `ses-sis-<UTC timestamp>.dump.gpg`, with a `.sha256` beside it.
+- **How long it keeps them.** Backups older than `BACKUP_KEEP_DAYS` (default 14) are deleted on every run, whether or not that run's backup succeeded. The job never keeps a backup longer than the shortest retention window (`RETENTION_COURSE_GRACE_DAYS`, `RETENTION_TELEMETRY_DAYS`), whatever `BACKUP_KEEP_DAYS` says. This is how backups "expire on the same schedule": anything deleted by the retention job, a purge or a research withdrawal leaves the backups within that window too.
+- **What it records.** One `admin.backup_run` audit event per run. A failed run exits non-zero, so the unit shows `failed`.
+
+### One-time setup
+
+1. **The backup key pair: make it off the VM.** On a trusted workstation, not on the VM:
+   ```bash
+   gpg --quick-gen-key "SES database backups" rsa4096 encr never
+   gpg --armor --export "SES database backups" > ses-backup-public.asc
+   gpg --armor --export-secret-keys "SES database backups" > ses-backup-private.asc
+   ```
+   - **Why RSA:** a backup encrypted to an RSA key can be restored with any GnuPG 2.x. Keys of the newer default type need GnuPG 2.3+ to decrypt.
+   - **Where the private key goes:** store it and its passphrase in the institutional vault, readable by the Support Owner and one named deputy, then delete the workstation copy.
+   - **Why it matters:** without the private key no backup can be restored. A test restore (below) proves the key works.
+2. **Put the public key and the backup directory on the VM.**
+   ```bash
+   sudo install -d -m 755 /etc/stakeholder-engagement-simulator
+   sudo install -m 644 ses-backup-public.asc /etc/stakeholder-engagement-simulator/backup-public-key.asc
+   sudo install -d -m 700 -o mohammedthameem -g mohammedthameem /var/backups/stakeholder-engagement-simulator
+   ```
+   The backup directory must be on storage the VM platform snapshots or replicates, or the infrastructure team must copy the encrypted files off the VM. A backup on the VM's own disk protects against mistakes, not against losing the VM.
+3. **Add to `/opt/stakeholder-engagement-simulator/.env`:**
+   ```env
+   BACKUP_PUBLIC_KEY=/etc/stakeholder-engagement-simulator/backup-public-key.asc
+   BACKUP_DIR=/var/backups/stakeholder-engagement-simulator   # the default, and the only path the unit may write
+   BACKUP_KEEP_DAYS=14
+   ```
+4. **Install the timer and take a first backup now.** This needs `pg_dump` 16 (`postgresql-client-16`, installed with PostgreSQL in step 1) and `gnupg`.
+   ```bash
+   sudo cp /opt/stakeholder-engagement-simulator/deploy/systemd/stakeholder-engagement-simulator-backup.{service,timer} /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now stakeholder-engagement-simulator-backup.timer
+   sudo systemctl start stakeholder-engagement-simulator-backup.service
+   sudo journalctl -u stakeholder-engagement-simulator-backup -n 30 --no-pager
+   ls -l /var/backups/stakeholder-engagement-simulator/
+   ```
+
+### Restoring a backup
+
+Never restore over the live database. Restore into a new one, bring it up to date, then switch. The restore brings back the database as it was when the backup was taken, so anything removed since then (incident purges, research withdrawals, retention deletions) comes back too. Steps 4 and 5 remove it again before anyone can see it.
+
+1. **Pick the backup** and note its timestamp, e.g. `20261002T040000Z`.
+2. **Load the private key from the vault into a throwaway keyring:**
+   ```bash
+   export KEYRING=$(sudo -u postgres mktemp -d)
+   sudo -u postgres GNUPGHOME=$KEYRING gpg --batch --import < ses-backup-private.asc
+   ```
+3. **Restore into a new database.** The script checks the `.sha256` and refuses a database name that already exists. It asks for the key's passphrase, streams the decrypted dump straight into `pg_restore`, then prints row counts and the schema revision.
+   ```bash
+   sudo -u postgres GNUPGHOME=$KEYRING /opt/stakeholder-engagement-simulator/deploy/backup/ses-restore.sh \
+     /var/backups/stakeholder-engagement-simulator/ses-sis-20261002T040000Z.dump.gpg sis_restore_20261002
+   ```
+4. **Replay what happened after the backup.** `app.jobs.after_restore` reads the audit events since the backup and, in order:
+   - recreates incident flags;
+   - re-applies reviews;
+   - purges again;
+   - withdraws again any research consent that was withdrawn.
+
+   It is idempotent. Export the events from the VM's journal, or from the SIEM if the VM's journal is gone:
+   ```bash
+   sudo journalctl -u stakeholder-engagement-simulator -o cat --since "2026-10-02 04:00:00 UTC" > /tmp/audit.jsonl
+   # syslog sink instead:  sudo journalctl -t ses-audit -o cat --since "2026-10-02 04:00:00 UTC"
+   cd /opt/stakeholder-engagement-simulator/backend
+   sudo -u mohammedthameem bash -c 'set -a; . ../.env; DATABASE_URL=${DATABASE_URL%/sis}/sis_restore_20261002
+     .venv/bin/python -m app.jobs.after_restore --since 20261002T040000Z --audit-log /tmp/audit.jsonl --dry-run'
+   ```
+   Check the counts, then run the same command without `--dry-run`. The `DATABASE_URL` is built inside the shell, so the password never appears on a command line.
+5. **Run the retention job against the restored database,** the same way with `-m app.jobs.retention`. This re-applies the schedule.
+6. **Switch over:**
+   ```bash
+   sudo systemctl stop stakeholder-engagement-simulator
+   sudo -u postgres psql -c "ALTER DATABASE sis RENAME TO sis_replaced_20261002" \
+                         -c "ALTER DATABASE sis_restore_20261002 RENAME TO sis"
+   sudo systemctl start stakeholder-engagement-simulator
+   ```
+7. **Clean up.** `sudo -u postgres gpgconf --homedir $KEYRING --kill all; sudo rm -rf $KEYRING /tmp/audit.jsonl`. Once the restored database is confirmed good, drop the replaced one: it holds data under the retention schedule too. `sudo -u postgres dropdb sis_replaced_20261002`.
+
+**Test restore.** Do steps 1–5 into a scratch database before go-live and then once a term. Drop the scratch database instead of switching. Record the date and the row counts in the solution document.
+
+## Application email (SR-2026-052 item 3.3, SEC-INT-001)
+
+SES sends no email. Sign-in is Entra ID single sign-on, so there are no password resets or temporary passwords, and nothing else mails students or staff. `backend/tests/test_deploy.py` fails if mail-sending code or a mail library is added.
+
+If email is ever added:
+- it goes through the institution's mail relay, from a registered sender with SPF, DKIM and DMARC aligned;
+- it carries links only, never transcript, feedback or reflection text.
 
 ---
 

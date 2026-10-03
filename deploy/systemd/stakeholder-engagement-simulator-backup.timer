@@ -1,0 +1,13 @@
+[Unit]
+Description=Daily encrypted backup of the SES database
+
+[Timer]
+# After the 03:15 retention run, so each backup holds what the schedule
+# allows and nothing it has just deleted. Persistent: a run missed while the
+# VM was down happens at next boot rather than being skipped.
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

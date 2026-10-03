@@ -1,0 +1,25 @@
+[Unit]
+Description=Stakeholder Engagement Simulator — encrypted database backup (SEC-BCK-001)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=oneshot
+User=mohammedthameem
+Group=www-data
+WorkingDirectory=/opt/stakeholder-engagement-simulator/backend
+EnvironmentFile=/opt/stakeholder-engagement-simulator/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=UV_PROJECT_ENVIRONMENT=/opt/stakeholder-engagement-simulator/backend/.venv
+
+# pg_dump | gpg, encrypted to BACKUP_PUBLIC_KEY into BACKUP_DIR, then backups
+# older than the keep window (capped by the retention schedule) are deleted.
+# One admin.backup_run audit event per run; a failed run exits non-zero, so the
+# unit shows as failed (and alerts, where unit failures are monitored).
+ExecStart=/opt/stakeholder-engagement-simulator/backend/.venv/bin/python -m app.jobs.backup
+
+# The job needs to write only its backup directory.
+ProtectSystem=strict
+ReadWritePaths=/var/backups/stakeholder-engagement-simulator
+PrivateTmp=true
+NoNewPrivileges=true
