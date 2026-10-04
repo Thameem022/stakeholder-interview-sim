@@ -64,16 +64,41 @@ def test_hsts_and_the_security_headers_are_set():
     assert "microphone=(self)" in _header("Permissions-Policy")
 
 
-def test_the_content_security_policy_allows_no_inline_or_foreign_script():
-    csp = dict(
+def _csp() -> dict[str, list[str]]:
+    return dict(
         (part.split()[0], part.split()[1:]) for part in _header("Content-Security-Policy").split("; ")
     )
+
+
+def test_the_content_security_policy_allows_no_inline_or_foreign_script():
+    csp = _csp()
     assert csp["default-src"] == ["'self'"]
     assert csp["script-src"] == ["'self'"]
     assert csp["object-src"] == ["'none'"] and csp["frame-ancestors"] == ["'none'"]
     assert not any("unsafe" in v for values in csp.values() for v in values)
     # The interview WebSocket is the site's own.
     assert "wss://stakeholder-engagement-simulator.wpi.edu" in csp["connect-src"]
+
+
+def test_the_content_security_policy_names_no_third_party_host():
+    # The browser talks only to this site: fonts are self-hosted, and the one
+    # host-source is the site's own interview WebSocket. Anything that is not a
+    # quoted keyword or blob:/data: counts as a host, so a wildcard or a bare
+    # scheme such as https: fails too.
+    (site,) = set(_directives("ServerName"))
+    csp = _csp()
+    assert csp["style-src"] == ["'self'"] and csp["font-src"] == ["'self'"]
+    hosts = {
+        v for values in csp.values() for v in values
+        if not (v.startswith("'") and v.endswith("'")) and v not in {"blob:", "data:"}
+    }
+    assert hosts <= {f"wss://{site}"}, hosts
+
+
+def test_the_page_loads_nothing_from_another_origin():
+    # The CSP would block it in production; catch it here instead.
+    index = (REPO / "frontend" / "index.html").read_text()
+    assert not re.findall(r'(?:src|href)="(?:https?:)?//[^"]*"', index)
 
 
 def test_the_websocket_route_comes_before_the_catch_all():
