@@ -9,6 +9,8 @@ import { AuthProvider, useAuth } from './auth/AuthContext'
 import LoginPage from './auth/LoginPage'
 import RegisterPage from './auth/RegisterPage'
 import RequireAuth from './auth/RequireAuth'
+import TrialBriefing from './trial/TrialBriefing'
+import TrialInterview from './trial/TrialInterview'
 
 function StepKicker({ children }: { children: string }) {
   return (
@@ -304,7 +306,7 @@ export default function App() {
           <Route
             path="/"
             element={
-              <RequireAuth>
+              <RequireAuth studentsOnly>
                 <InterviewView />
               </RequireAuth>
             }
@@ -319,6 +321,17 @@ export default function App() {
           />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          {/* "Try SES": public briefing (it creates the guest session), then
+              the capped interview, which needs that session. */}
+          <Route path="/try" element={<TrialBriefing />} />
+          <Route
+            path="/try/interview"
+            element={
+              <RequireAuth>
+                <TrialInterview />
+              </RequireAuth>
+            }
+          />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

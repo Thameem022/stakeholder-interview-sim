@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import ScoreReport, { type SessionEvaluation } from './ScoreReport'
-import { getLatestEvaluation } from './api'
+import { getLatestEvaluation, logout } from './api'
+import { useAuth } from './auth/AuthContext'
+import { clearTrial } from './trial/storage'
 
 type Status = 'idle' | 'loading' | 'loaded' | 'not_found' | 'error'
 
@@ -45,7 +47,26 @@ export default function ScorePage() {
     }
   }, [evaluation, sessionId])
 
-  const goBack = () => navigate('/', { state: { conversation, evaluation } })
+  const { user, refresh } = useAuth()
+
+  // A "Try SES" guest has nowhere to go back to: their one interview is done,
+  // so closing the report ends the guest session and offers registration.
+  const goBack = async () => {
+    if (!user?.is_trial) {
+      navigate('/', { state: { conversation, evaluation } })
+      return
+    }
+    try {
+      await logout()
+    } catch {
+      // The guest session expires on its own within minutes anyway.
+    }
+    clearTrial()
+    // Leave first: clearing the user while still on this route lets
+    // RequireAuth redirect to /login itself, dropping the trial_done state.
+    navigate('/login', { replace: true, state: { reason: 'trial_done' } })
+    await refresh()
+  }
 
   if (status === 'loading') {
     return (

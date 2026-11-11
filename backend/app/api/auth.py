@@ -337,4 +337,4 @@ async def me(request: Request) -> dict:
             )
         await touch_session(conn, row["session_id"])
 
-    return _user_payload(row)
+    return {**_user_payload(row), "is_trial": row["is_trial"]}

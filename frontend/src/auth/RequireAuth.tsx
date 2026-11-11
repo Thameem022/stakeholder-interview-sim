@@ -14,7 +14,14 @@ import { useAuth } from './AuthContext'
  * This is convenience, not security: the API enforces the same thing, so a
  * user who bypassed this would see an empty shell and a string of 401s.
  */
-export default function RequireAuth({ children }: { children: ReactNode }) {
+export default function RequireAuth({
+  children,
+  studentsOnly = false,
+}: {
+  children: ReactNode
+  /** Also keep "Try SES" guests out; they are sent back to their trial. */
+  studentsOnly?: boolean
+}) {
   const { user, loading } = useAuth()
   const location = useLocation()
 
@@ -32,6 +39,10 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
 
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  }
+
+  if (studentsOnly && user.is_trial) {
+    return <Navigate to="/try/interview" replace />
   }
 
   return <>{children}</>
