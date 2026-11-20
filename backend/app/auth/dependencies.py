@@ -31,6 +31,7 @@ class CurrentUser:
     first_name: str
     last_name: str
     session_id: UUID
+    is_trial: bool = False
 
 
 async def require_user(request: Request) -> CurrentUser:
@@ -64,6 +65,7 @@ async def require_user(request: Request) -> CurrentUser:
         first_name=row["first_name"],
         last_name=row["last_name"],
         session_id=row["session_id"],
+        is_trial=row["is_trial"],
     )
 
 
