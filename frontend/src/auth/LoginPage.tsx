@@ -182,7 +182,7 @@ export default function LoginPage() {
                 onClick={() => navigate('/try')}
                 className="text-muted underline underline-offset-[3px] hover:text-brand"
               >
-                Try SES for 10 minutes, no account needed →
+                Try SES for 5 minutes, no account needed →
               </button>
             </p>
           )}

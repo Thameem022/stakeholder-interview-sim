@@ -17,7 +17,7 @@ TRIAL_TARGET_CHUNK_ID = "alex_m_t3_threshold_gap"
 # reachable but earned: the Threshold Gap opens only after trust is built, in
 # the shape the SIC key credits (indicator_behaviors / surfacing_cues for
 # alex_m_t3_threshold_gap), and pressing closes it again. Paced for a
-# 10-minute call: a handful of good exchanges, not a long courtship.
+# 5-minute call: a handful of good exchanges, not a long courtship.
 TRIAL_ALEX_INSTRUCTIONS = """
 TRIAL SESSION: RELOCATION AND THE THRESHOLD GAP
 These rules apply to this conversation only. Where they conflict with your

@@ -59,13 +59,13 @@ class Settings(BaseSettings):
     # registration up is always a deliberate act rather than a default.
     auth_registration_allowlist: str = ""
 
-    # "Try SES" guest trial: one 10-minute interview with Alex, no account.
+    # "Try SES" guest trial: one 5-minute interview with Alex, no account.
     # Off by default so deploying the code changes nothing until it is enabled.
     trial_enabled: bool = False
     # Global ceiling on trial starts per 24h. Every trial is a realtime session
     # paid for by us, so this is the cost control, not the per-IP limit.
     trial_daily_cap: int = 200
-    trial_interview_minutes: int = 10
+    trial_interview_minutes: int = 5
     trial_session_minutes: int = 20
 
     @property

@@ -1,9 +1,9 @@
 """Limits that apply only to "Try SES" guests (CurrentUser.is_trial).
 
 Every function here is a no-op for a regular account, which is what keeps the
-trial from changing anything for students. The 10-minute cap is enforced on
+trial from changing anything for students. The 5-minute cap is enforced on
 our endpoints from `interview_sessions.started_at`: the browser ends the call
-at 10:00, and anything that keeps talking past that loses retrieval and can no
+when time is up, and anything that keeps talking past that loses retrieval and can no
 longer write turns. The final ended=true append is still accepted so the
 transcript is saved and can be scored.
 """

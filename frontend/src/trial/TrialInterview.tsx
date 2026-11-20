@@ -9,7 +9,7 @@ import { formatClock, loadTrial, markTrialUsed } from './storage'
 
 const PERSONA_ID = 'alex_martinez'
 const PERSONA_NAME = 'Alex Martinez'
-const DEFAULT_MINUTES = 10
+const DEFAULT_MINUTES = 5
 
 /**
  * "Try SES", step 2: one interview with Alex, capped in time.
