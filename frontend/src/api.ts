@@ -141,6 +141,8 @@ export interface AuthUser {
   email: string
   first_name: string
   last_name: string
+  /** A "Try SES" guest. Only /api/auth/me reports it. */
+  is_trial?: boolean
 }
 
 /**
@@ -217,5 +219,28 @@ export const getMe = async (): Promise<AuthUser | null> => {
     throw asAuthError(error)
   }
 }
+
+// --- "Try SES" trial ----------------------------------------------------------
+
+export interface TrialBriefing {
+  persona_id: string
+  persona_name: string
+  persona_role: string
+  target_label: string
+  target_chunk_id: string
+  scenario: string
+  goal: string
+  tips: string[]
+  avoid: string
+}
+
+export interface TrialStart {
+  user: AuthUser
+  briefing: TrialBriefing
+  interview_minutes: number
+}
+
+/** Creates a guest account and signs this browser in as it. */
+export const startTrial = () => authPost<TrialStart>('/api/trial/start', {})
 
 export default apiClient

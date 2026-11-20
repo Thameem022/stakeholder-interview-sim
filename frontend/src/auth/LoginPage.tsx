@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 import { AuthError, login } from '../api'
+import { trialUsed } from '../trial/storage'
 import { useAuth } from './AuthContext'
 import AuthLayout from './AuthLayout'
 import { EMAIL_DOMAIN, isAllowedDomain } from './config'
@@ -13,7 +14,10 @@ export default function LoginPage() {
   const { refresh } = useAuth()
 
   // Set when the interceptor bounced us here off a 401 mid-session.
-  const expired = (location.state as { reason?: string } | null)?.reason === 'session_expired'
+  const reason = (location.state as { reason?: string } | null)?.reason
+  const expired = reason === 'session_expired'
+  // Set when a "Try SES" guest closes their score report.
+  const trialDone = reason === 'trial_done'
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -61,6 +65,14 @@ export default function LoginPage() {
         {expired && !error && !succeeded && (
           <div className="mt-[22px]">
             <Banner tone="error">Your session has ended. Please sign in again.</Banner>
+          </div>
+        )}
+        {trialDone && !error && !succeeded && (
+          <div className="mt-[22px]">
+            <Banner tone="success">
+              Thanks for trying SES. Register with your WPI email to interview all four
+              stakeholders.
+            </Banner>
           </div>
         )}
         {error && (
@@ -161,6 +173,19 @@ export default function LoginPage() {
               Register
             </button>
           </p>
+
+          {!trialUsed() && (
+            <p className="-mt-2 text-[12.5px] text-muted-soft">
+              Just curious?{' '}
+              <button
+                type="button"
+                onClick={() => navigate('/try')}
+                className="text-muted underline underline-offset-[3px] hover:text-brand"
+              >
+                Try SES for 5 minutes, no account needed →
+              </button>
+            </p>
+          )}
         </div>
       </form>
     </AuthLayout>

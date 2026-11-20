@@ -31,14 +31,19 @@ def hash_session_token(token: str) -> str:
 
 
 async def create_session(
-    conn: asyncpg.Connection, user_id: UUID, remember: bool
+    conn: asyncpg.Connection,
+    user_id: UUID,
+    remember: bool,
+    ttl: timedelta | None = None,
 ) -> tuple[str, datetime]:
+    """`ttl` overrides the remember/default lifetime (trial guests use it)."""
     token = generate_session_token()
-    ttl = (
-        timedelta(days=settings.auth_session_remember_days)
-        if remember
-        else timedelta(hours=settings.auth_session_default_hours)
-    )
+    if ttl is None:
+        ttl = (
+            timedelta(days=settings.auth_session_remember_days)
+            if remember
+            else timedelta(hours=settings.auth_session_default_hours)
+        )
     expires_at = datetime.now(timezone.utc) + ttl
     await conn.execute(
         "INSERT INTO auth_sessions (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
@@ -59,7 +64,8 @@ async def load_session_user(
     """
     return await conn.fetchrow(
         """
-        SELECT u.id, u.email, u.first_name, u.last_name, s.id AS session_id
+        SELECT u.id, u.email, u.first_name, u.last_name, u.is_trial,
+               s.id AS session_id
         FROM auth_sessions s
         JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = $1

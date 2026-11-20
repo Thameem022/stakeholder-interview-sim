@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from app.auth.dependencies import CurrentUser, rate_limited, require_user
 from app.db import get_pool
 from app.realtime.session import InterviewSession
+from app.realtime.trial_guard import check_trial_time
 from app.vector_store import embed_one, search_persona, search_world
 
 logger = logging.getLogger(__name__)
@@ -142,9 +143,13 @@ def _format_context(persona_chunks, world_chunks) -> str:
     response_model=RetrieveResponse,
     dependencies=[Depends(rate_limited(*_RETRIEVE_LIMIT))],
 )
-async def retrieve_context(req: RetrieveRequest) -> RetrieveResponse:
+async def retrieve_context(
+    req: RetrieveRequest, user: Annotated[CurrentUser, Depends(require_user)]
+) -> RetrieveResponse:
     if not req.persona_id or not req.query.strip():
         raise HTTPException(status_code=400, detail="persona_id and query required")
+
+    await check_trial_time(user)
 
     k_persona, k_world = 5, 3
     started = perf_counter()
@@ -213,6 +218,14 @@ async def append_transcript(
         sid = UUID(req.session_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="invalid session_id")
+
+    # A guest's closing ended=true call is let through past the cap so their
+    # transcript is still saved and scored, but it may not carry a new turn.
+    if user.is_trial:
+        if req.ended:
+            req.text = ""
+        else:
+            await check_trial_time(user)
 
     # Someone else's session is indistinguishable from a nonexistent one, so a
     # valid id cannot be confirmed by probing. persist() re-checks ownership on
