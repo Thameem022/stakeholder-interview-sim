@@ -27,6 +27,7 @@ from app.api.auth import router as auth_router
 from app.api.eval import router as eval_router
 from app.api.health import router as health_router
 from app.api.personas import router as personas_router
+from app.api.trial import router as trial_router
 from app.auth.dependencies import require_user
 from app.config import settings
 from app.db import close_pool, init_pool
@@ -55,6 +56,9 @@ app.add_middleware(
 # gating it would lock everyone out of the login endpoints themselves.
 app.include_router(health_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
+# Public like auth: it is what creates the guest session. Returns 404 unless
+# TRIAL_ENABLED is set.
+app.include_router(trial_router, prefix="/api")
 
 # Everything else needs a session. Declared here rather than per-route so that
 # "what is public?" has exactly one answer, and so a route added to any of

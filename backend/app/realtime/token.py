@@ -24,6 +24,12 @@ from app.config import settings
 from app.personas.prompt_assembly import build_persona_system_prompt
 from app.personas.voices import VOICE_MAP
 from app.realtime.session import InterviewSession
+from app.realtime.trial_guard import (
+    check_trial_mint,
+    mark_trial_session,
+    trial_instructions,
+    trial_persona,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -131,9 +137,17 @@ async def mint_token(
     if not req.persona_id:
         raise HTTPException(status_code=400, detail="persona_id required")
 
+    await check_trial_mint(user)
+    persona_id = trial_persona(user, req.persona_id)
+    voice_id = (None if user.is_trial else req.voice_id) or VOICE_MAP.get(
+        persona_id, "alloy"
+    )
+
     sid = uuid4()
-    voice_id = req.voice_id or VOICE_MAP.get(req.persona_id, "alloy")
-    session_config = _build_session_config(req.persona_id, voice_id)
+    session_config = _build_session_config(persona_id, voice_id)
+    session_config["instructions"] = trial_instructions(
+        user, session_config["instructions"]
+    )
 
     # The session row is written before the OpenAI call, not after: an ephemeral
     # key is billable, so it should not be minted for a request that is about to
@@ -141,11 +155,12 @@ async def mint_token(
     session = InterviewSession(
         id=sid,
         user_id=user.id,
-        persona_id=req.persona_id,
+        persona_id=persona_id,
         voice_id=voice_id,
         started_at=datetime.utcnow(),
     )
     await session.create()
+    await mark_trial_session(user, sid)
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         try:
@@ -177,7 +192,7 @@ async def mint_token(
         raise HTTPException(status_code=502, detail="openai response missing ephemeral key")
 
     logger.info(
-        f"minted ephemeral key for session={sid} persona={req.persona_id} user={user.id}"
+        f"minted ephemeral key for session={sid} persona={persona_id} user={user.id}"
     )
     return TokenResponse(
         ephemeral_key=ephemeral_key,
